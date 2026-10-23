@@ -46,6 +46,8 @@
     });
   }
   const defaults = {bridge:[30,80],state:[30,365],integrator:[340,80],domains:[340,365],neighbors:[650,25],forces:[650,335],pme:[960,80],transport:[960,365]};
+  const compactDefaults = {bridge:[30,50],state:[30,225],integrator:[340,50],domains:[340,225],neighbors:[650,10],forces:[650,225],pme:[960,50],transport:[960,225]};
+  let compactGraph = false;
   let positions = structuredClone(defaults);
   let state = {view:'architecture', component:null, focus:null, tab:'details', symbol:null, commit:null, measure:'scaling', deck:'tuned', precision:'Mixed', hardware:'b200', unit:'nsPerDay'};
   let camera = {x:0,y:0,scale:1}, drag = null, suppressClick = false, toastTimer, lastNodeClick = {id:null,time:0};
@@ -76,6 +78,21 @@
   function changeView(view) {
     explorerNavigation.navigate({view,component:null,focus:null,symbol:null,
       commit:null,tab:'details'}, {focus:true});
+  }
+  function goHome() {
+    changeView('architecture');
+    requestAnimationFrame(fit);
+  }
+  function shareView() {
+    const preview = location.protocol === 'file:' || ['localhost','127.0.0.1','[::1]'].includes(location.hostname);
+    const url = new URL(preview ? 'https://wmarti.github.io/genesis-gpu-native/' : location.href);
+    url.hash = explorerNavigation.encode(state);
+    $('#share-url').value = url.href;
+    $('#share-preview-note').hidden = !preview;
+    $('#share-status').textContent = '';
+    $('#share-dialog').showModal();
+    $('#share-url').focus();
+    $('#share-url').select();
   }
   function selectComponent(id,drill=false) {
     if(!byId(id))return;
@@ -122,7 +139,8 @@
       const c=byId(state.focus);
       $('#view-eyebrow').textContent=c?'INSIDE THE COMPONENT':'MOLECULAR DYNAMICS · ON THE GPU';
       $('#view-title').textContent=c?titleOf(c):'A whole simulation. One connected system.';
-      $('#view-subtitle').textContent=c?G[c.id].summary:'Follow a step from input to motion. Select a component to see how it works.';
+      $('#view-subtitle').textContent=c?G[c.id].summary:'Select a component to see its role, connections, and code.';
+      if(!c&&!state.component)$('#view-subtitle').innerHTML='Select a component to explore. <button class="start-link" data-select="bridge">New here? Start with setup <span aria-hidden="true">→</span></button>';
       $('#scope-chip').textContent=c?`${c.functions.length} source definitions`:'8 components';
       if(c)renderSteps(c);else renderGraph();
     } else if(state.view==='movement') {
@@ -173,10 +191,20 @@
   function applyCamera(){ $('#graph-world').style.transform=`translate(${camera.x}px,${camera.y}px) scale(${camera.scale})`;$('#zoom-label').textContent=Math.round(camera.scale*100)+'%'; }
   function fit(){
     const el=$('#graph-viewport');if(el.hidden)return;
+    // Keep labels readable on laptops: show roles on the map and explanations
+    // in the inspector, instead of scaling a paragraph down to a few pixels.
+    const compact = innerWidth>1100 && (el.clientWidth<1100 || el.clientHeight<490);
+    if(compact!==compactGraph) {
+      const from=compactGraph?compactDefaults:defaults, to=compact?compactDefaults:defaults;
+      for(const id of Object.keys(positions))positions[id]=[positions[id][0]+to[id][0]-from[id][0],positions[id][1]+to[id][1]-from[id][1]];
+      compactGraph=compact;
+      $('#graph-world').classList.toggle('compact-graph',compact);
+      $$('.node').forEach(n=>{const p=positions[n.dataset.node];n.style.left=p[0]+'px';n.style.top=p[1]+'px';});
+    }
     const maxX=Math.max(...Object.values(positions).map(p=>p[0]))+245, maxY=Math.max(...A.components.map(c=>positions[c.id][1]+($(`[data-node="${c.id}"]`)?.offsetHeight||190)))+28;
     const minX=Math.min(...Object.values(positions).map(p=>p[0]))-15,minY=Math.min(...Object.values(positions).map(p=>p[1]))-15;
     camera.scale=Math.min((el.clientWidth-32)/(maxX-minX),(el.clientHeight-25)/(maxY-minY),1.15);
-    camera.scale=Math.max(.2,camera.scale);camera.x=(el.clientWidth-(maxX-minX)*camera.scale)/2-minX*camera.scale;camera.y=(el.clientHeight-(maxY-minY)*camera.scale)/2-minY*camera.scale;camera.initialized=true;applyCamera();
+    camera.scale=Math.max(.2,camera.scale);camera.x=(el.clientWidth-(maxX-minX)*camera.scale)/2-minX*camera.scale;camera.y=(el.clientHeight-(maxY-minY)*camera.scale)/2-minY*camera.scale;camera.initialized=true;applyCamera();updateConnections();
   }
   function zoom(factor,x,y){const v=$('#graph-viewport');x??=v.clientWidth/2;y??=v.clientHeight/2;const s=Math.max(.2,Math.min(2,camera.scale*factor));const r=s/camera.scale;camera.x=x-(x-camera.x)*r;camera.y=y-(y-camera.y)*r;camera.scale=s;applyCamera();}
   function renderSteps(c){
@@ -329,12 +357,12 @@
   }
   function overviewInspector(){
     return intro('GENESIS · NATIVE SPDYN','A simulation, in context.','Move atoms forward in time, without moving the whole calculation back to the CPU.')+
+      '<div class="inspector-actions"><button class="button primary" data-select="bridge">Start with setup <span aria-hidden="true">→</span></button><button class="button" data-view="measurements">See performance</button></div>'+
       '<div class="overview-flow" aria-label="Explore the main responsibilities">'+[
         ['bridge','The CPU prepares the run','Read the inputs and check support.','HOST'],
         ['integrator','The GPU advances the atoms','Keep state, calculate forces, take a step.','GPU'],
         ['domains','Multiple GPUs share the work','Exchange boundary atoms and forces.','MULTI-GPU']
       ].map(([id,title,text,badge])=>`<button class="flow-step" data-select="${id}"><span class="flow-icon">${icon(id)}</span><span><small>${badge}</small><strong>${title}</strong><span>${text}</span></span><span class="flow-chevron" aria-hidden="true">›</span></button>`).join('')+'</div>'+
-      '<div class="inspector-actions"><button class="button primary" data-select="bridge">Start exploring <span aria-hidden="true">→</span></button><button class="button" data-view="measurements">See results</button></div>'+
       '<h3>Explore at your own depth</h3><p>Select a card for its role. Open its parts for real code, or follow a connection to the next responsibility.</p><div class="overview-stats"><span><strong>8</strong> components</span><span><strong>'+fmt(I.stats.files)+'</strong> source files</span><span><strong>'+fmt(I.stats.symbols)+'</strong> symbols</span></div><p class="scope-note">A curated source map, not a complete execution trace.</p>'+external(A.sourceGuide,'Read the native GPU guide ↗','subtle-link');
   }
   function componentInspector(c){
@@ -393,7 +421,7 @@
     return intro('GPU SCALING',system.label,'More GPUs share the same simulation. Compare one, two and four devices under the documented setup.')+
       '<div class="info-rows">'+row('Atoms',fmt(system.atoms))+row('Timestep',system.timestepFs+' fs')+row('Ensemble',esc(system.ensemble))+row('GPU',esc(hw.fullLabel))+row('Interconnect',esc(hw.transport))+row('Precision',esc(state.precision))+'</div><h3>The simulation setup</h3><p>'+esc(deck.details)+'</p><div class="callout"><strong>Read the units</strong><p>ns/day is simulated time per wall-clock day. ms/step is time spent on one integration step. Different timesteps mean different work per simulated nanosecond.</p></div>'+external(deck.source.url,'Read the test conditions ↗','subtle-link');
   }
-  function openSearch(){ $('#search-dialog').showModal();$('#search-input').value='';renderSearch('');$('#search-input').focus(); }
+  function openSearch(){ $$('dialog[open]').forEach(d=>d.close());$('#search-dialog').showModal();$('#search-input').value='';renderSearch('');$('#search-input').focus(); }
   let searchItems=[];
   function renderSearch(query){
     const q=query.trim().toLowerCase();searchItems=[];
@@ -422,13 +450,23 @@
     if(b.dataset.measure){state.measure=b.dataset.measure;state.tab='details';navigateRender();return;}
     if(b.hasAttribute('data-result')){const r=searchItems[Number(b.dataset.result)];$('#search-dialog').close();if(r.type==='component')selectComponent(r.component.id);else selectSymbol(r.symbol);return;}
   });
-  $('#home').onclick=$('#overview').onclick=()=>changeView('architecture');
+  $('#home').onclick=$('#overview').onclick=goHome;
+  $('#share-open').onclick=shareView;
+  $('#share-copy').onclick=async()=>{
+    try {
+      await navigator.clipboard.writeText($('#share-url').value);
+      $('#share-status').textContent='Link copied';
+    } catch(_) {
+      $('#share-url').focus();$('#share-url').select();
+      $('#share-status').textContent='Press ⌘ C or Ctrl C to copy the selected link.';
+    }
+  };
   $('#back').onclick=navigateBack;
   $('.skip-link').onclick=e=>{e.preventDefault();$('#workspace').focus();};
   $('#history-open').onclick=()=>changeView('movement');
   $('#neighbors').onchange=updateConnections;
   $('#zoom-in').onclick=()=>zoom(1.2);$('#zoom-out').onclick=()=>zoom(1/1.2);$('#fit').onclick=fit;
-  $('#arrange').onclick=()=>{positions=structuredClone(defaults);renderGraph();requestAnimationFrame(fit);toast('Original layout restored');};
+  $('#arrange').onclick=()=>{positions=structuredClone(compactGraph?compactDefaults:defaults);renderGraph();requestAnimationFrame(fit);toast('Original layout restored');};
   $('#search-open').onclick=openSearch;$('#search-input').oninput=e=>renderSearch(e.target.value);
   $('#search-input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#search-results button')?.click();}});
   $('#search-dialog form').addEventListener('submit',e=>{if(e.submitter)return;e.preventDefault();$('#search-results button')?.click();});

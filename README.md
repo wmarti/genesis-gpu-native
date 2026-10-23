@@ -1,6 +1,10 @@
 # GENESIS SPDYN. Now GPU-resident.
 
-[Quick start](#quick-start) · [User guide](doc/21_GPU_Native.rst) · [Architecture](doc/21_GPU_Native.rst#architecture-at-a-glance) · [Example output](doc/21_GPU_Native.rst#example-output) · [Release & benchmarks](https://github.com/wmarti/genesis-gpu-native/releases/tag/gpu-resident-v1)
+**[Explore GENESIS →](https://wmarti.github.io/genesis-gpu-native/)** · [Quick start](#quick-start) · [User guide](doc/21_GPU_Native.rst) · [Release & benchmarks](https://github.com/wmarti/genesis-gpu-native/releases/tag/gpu-resident-v1)
+
+> **See how the GPU port works.** Explore eight connected components, inspect the source, and compare published performance results. No GPU or installation needed.
+>
+> [Architecture](https://wmarti.github.io/genesis-gpu-native/) · [Performance](https://wmarti.github.io/genesis-gpu-native/#view=measurements) · [What changed](https://wmarti.github.io/genesis-gpu-native/#view=movement) · [Run locally](docs/explorer/README.md#preview-and-verify)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/wmarti/genesis-gpu-native/releases/download/gpu-resident-v1/hero-dark.png">
@@ -132,9 +136,14 @@ ranks, two runs gave bitwise identical output in all 46 legs, on two GPU archite
 
 ## Everything stays on the GPU.
 
-[![Native GPU architecture: host responsibilities, persistent device state and GPU-to-GPU communication](doc/images/gpu-native-architecture.png)](doc/21_GPU_Native.rst#architecture-at-a-glance)
+<a href="https://wmarti.github.io/genesis-gpu-native/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="doc/images/genesis-explorer-dark.jpg">
+    <img alt="GENESIS code explorer showing eight native GPU components, the source inspector and port history." src="doc/images/genesis-explorer-light.jpg">
+  </picture>
+</a>
 
-[Explore the architecture in the native GPU guide →](doc/21_GPU_Native.rst#architecture-at-a-glance)
+[Open the interactive explorer →](https://wmarti.github.io/genesis-gpu-native/) · [Read the architecture guide and diagram](doc/21_GPU_Native.rst#architecture-at-a-glance)
 
 Forces, energies and virials are summed in 64-bit fixed point, so results never depend on thread scheduling. GPUs on a
 node exchange halos peer to peer; nodes use MPI. The exchange path follows a fixed rule from the hardware topology,
