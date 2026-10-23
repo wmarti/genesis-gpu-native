@@ -5,12 +5,18 @@ on:
     branches: [main]
     paths:
       - 'docs/explorer/**'
+      - 'doc/images/explorer-components/**'
+      - 'doc/images/gpu-native-architecture.svg'
+      - 'README.md'
       - 'scripts/*explorer*.py'
       - 'scripts/*explorer*.js'
       - '.github/workflows/explorer-pages.yml'
   pull_request:
     paths:
       - 'docs/explorer/**'
+      - 'doc/images/explorer-components/**'
+      - 'doc/images/gpu-native-architecture.svg'
+      - 'README.md'
       - 'scripts/*explorer*.py'
       - 'scripts/*explorer*.js'
       - '.github/workflows/explorer-pages.yml'
@@ -45,6 +51,8 @@ jobs:
           NODE
       - name: Verify navigation and source deep links
         run: node --test scripts/test_explorer_navigation.js
+      - name: Verify clickable architecture diagrams
+        run: python3 scripts/build_explorer_diagrams.py --check
       - name: Version browser assets for consistent updates
         run: |
           python3 <<'PY'

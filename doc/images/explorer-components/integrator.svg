@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="178" viewBox="0 0 400 178" role="img" aria-labelledby="title desc">
+<title id="title">Advance the motion</title><desc id="desc">Integrate, constrain and control temperature. Open the component and its source code.</desc>
+<style>
+.card{fill:#f7f9f8;stroke:#dce4e0} .title{fill:#26352e} .muted{fill:#617168} .accent{fill:#476e5b}
+@media(prefers-color-scheme:dark){.card{fill:#272c2a;stroke:#454d49}.title{fill:#f1f5f2}.muted{fill:#bac5be}.accent{fill:#b7d6c4}}
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+</style>
+<rect class="card" x="1" y="1" width="398" height="176" rx="18"/>
+<text class="accent" x="22" y="29" font-size="10" font-weight="600" letter-spacing="1.2">GPU · MOTION</text>
+<text class="title" x="22" y="64" font-size="25" font-weight="600">Advance</text>
+<text class="title" x="22" y="94" font-size="25" font-weight="600">the motion</text>
+<text class="muted" x="22" y="124" font-size="13">Integrate, constrain and control temperature</text>
+<text class="accent" x="22" y="155" font-size="12" font-weight="600">Explore component &amp; code →</text>
+<text class="accent" x="365" y="87" font-size="28" text-anchor="middle">↗</text>
+</svg>

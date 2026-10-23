@@ -36,11 +36,13 @@ Architecture at a glance
 .. figure:: images/gpu-native-architecture.png
    :alt: Native GPU architecture: host setup and control, persistent GPU state and kernels, and communication between MPI ranks.
    :width: 100%
-   :target: images/gpu-native-architecture.svg
+   :target: https://wmarti.github.io/genesis-gpu-native/architecture.html
 
    One MPI rank drives one GPU. GENESIS keeps setup, control and output on
    the host; the native core owns the MD state and computations on the
    device. The boxes group responsibilities rather than timestep order.
+   Select the diagram to open its interactive version, where each block
+   links to the relevant component and source code.
 
 Particle data is exported at trajectory, restart and replica-exchange
 boundaries. Communication between ranks may stage through host memory

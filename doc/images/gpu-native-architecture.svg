@@ -1,6 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1020" viewBox="0 0 1400 1020" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1020" viewBox="0 0 1400 1020" role="group" aria-labelledby="title desc">
 <title id="title">GENESIS native GPU architecture</title>
 <desc id="desc">One MPI rank drives one GPU. The host owns setup, step control, barostat scalars and output boundaries. GPU state, force evaluation, PME, constraints, integration, thermostat and domain work remain on the device. Neighboring ranks exchange halos, forces, migrating atoms and PME mesh data through peer transfers or MPI. Boxes group responsibilities rather than timestep order.</desc>
+<style>
+.diagram-block { cursor:pointer; text-decoration:none; }
+.diagram-block:hover > rect:first-of-type { stroke:#174f8f; stroke-width:3; }
+.diagram-block:focus { outline:3px solid #174f8f; outline-offset:5px; }
+.diagram-block:focus > rect:first-of-type { stroke:#174f8f; stroke-width:3; }
+</style>
 <rect x="0" y="0" width="1400" height="1020" rx="0" fill="#ffffff"/>
 <text x="52" y="78" fill="#15263c" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" text-anchor="start">GPU native architecture</text>
 <text x="52" y="120" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="400" text-anchor="start">One MPI rank per GPU. The MD state remains on the device.</text>
@@ -10,44 +16,74 @@
 <text x="80" y="269" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" text-anchor="start">Setup, control and I/O</text>
 <text x="648" y="239" fill="#1764c0" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" text-anchor="start">GPU · NATIVE CORE</text>
 <text x="648" y="269" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" text-anchor="start">Resident state and device kernels</text>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=bridge&amp;function=gpu_core_describe" target="_top" tabindex="0" aria-label="Open Setup &amp; input in the explorer: its component and gpu_core_describe source code.">
+<title>Open Setup &amp; input in the explorer: its component and gpu_core_describe source code.</title>
 <rect x="80" y="298" width="328" height="88" rx="18" fill="#ffffff" stroke="#dce5ef" stroke-width="1.5"/>
 <text x="98" y="332" fill="#15263c" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" text-anchor="start">Setup &amp; input</text>
 <text x="98" y="362" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="start">Topology · coordinates · descriptors</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=bridge&amp;function=gpu_core_vverlet" target="_top" tabindex="0" aria-label="Open Step control in the explorer: its component and gpu_core_vverlet source code.">
+<title>Open Step control in the explorer: its component and gpu_core_vverlet source code.</title>
 <rect x="80" y="420" width="328" height="104" rx="18" fill="#ffffff" stroke="#dce5ef" stroke-width="1.5"/>
 <text x="98" y="454" fill="#15263c" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" text-anchor="start">Step control</text>
 <text x="98" y="484" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="start">Rebuild and output cadence</text>
 <text x="98" y="509" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="start">Barostat scalars</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=state&amp;function=gpu_core_pull" target="_top" tabindex="0" aria-label="Open Output boundaries in the explorer: its component and gpu_core_pull source code.">
+<title>Open Output boundaries in the explorer: its component and gpu_core_pull source code.</title>
 <rect x="80" y="554" width="328" height="110" rx="18" fill="#ffffff" stroke="#dce5ef" stroke-width="1.5"/>
 <text x="98" y="589" fill="#15263c" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" text-anchor="start">Output boundaries</text>
 <text x="98" y="620" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="start">Trajectory · restart</text>
 <text x="98" y="645" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="start">Replica exchange</text>
+</a>
 <text x="80" y="708" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="start">Collective eligibility check at setup</text>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=state&amp;function=gcn_device" target="_top" tabindex="0" aria-label="Open Persistent MD state in the explorer: its component and gcn_device source code.">
+<title>Open Persistent MD state in the explorer: its component and gcn_device source code.</title>
 <rect x="648" y="298" width="672" height="88" rx="16" fill="#1764c0"/>
 <text x="668" y="331" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" text-anchor="start">Persistent MD state</text>
 <text x="668" y="362" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="start">Coordinates · velocities · forces · neighbor list</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=neighbors&amp;function=gpu_core_rebuild" target="_top" tabindex="0" aria-label="Open Neighbor list in the explorer: its component and gpu_core_rebuild source code.">
+<title>Open Neighbor list in the explorer: its component and gpu_core_rebuild source code.</title>
 <rect x="648" y="420" width="216" height="106" rx="14" fill="#ffffff" stroke="#c9ddf5" stroke-width="1.5"/>
 <text x="664" y="453" fill="#1764c0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" text-anchor="start">Neighbor list</text>
 <text x="664" y="484" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">Scheduled rebuilds</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=forces&amp;function=native_force_join" target="_top" tabindex="0" aria-label="Open Force terms in the explorer: its component and native_force_join source code.">
+<title>Open Force terms in the explorer: its component and native_force_join source code.</title>
 <rect x="876" y="420" width="216" height="106" rx="14" fill="#ffffff" stroke="#c9ddf5" stroke-width="1.5"/>
 <text x="892" y="453" fill="#1764c0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" text-anchor="start">Force terms</text>
 <text x="892" y="484" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">Non-bonded · bonded</text>
 <text x="892" y="507" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">1–4 · exclusions</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=pme&amp;function=native_pme_run" target="_top" tabindex="0" aria-label="Open PME reciprocal in the explorer: its component and native_pme_run source code.">
+<title>Open PME reciprocal in the explorer: its component and native_pme_run source code.</title>
 <rect x="1104" y="420" width="216" height="106" rx="14" fill="#ffffff" stroke="#c9ddf5" stroke-width="1.5"/>
 <text x="1120" y="453" fill="#1764c0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" text-anchor="start">PME reciprocal</text>
 <text x="1120" y="484" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">Mesh · cuFFT · solve</text>
 <text x="1120" y="507" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">Spread / gather</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=integrator&amp;function=gpu_core_constrain" target="_top" tabindex="0" aria-label="Open Constraints in the explorer: its component and gpu_core_constrain source code.">
+<title>Open Constraints in the explorer: its component and gpu_core_constrain source code.</title>
 <rect x="648" y="548" width="216" height="106" rx="14" fill="#ffffff" stroke="#c9ddf5" stroke-width="1.5"/>
 <text x="664" y="581" fill="#1764c0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" text-anchor="start">Constraints</text>
 <text x="664" y="612" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">SETTLE · SHAKE</text>
 <text x="664" y="635" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">RATTLE</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=integrator&amp;function=gpu_core_vv1" target="_top" tabindex="0" aria-label="Open Dynamics in the explorer: its component and gpu_core_vv1 source code.">
+<title>Open Dynamics in the explorer: its component and gpu_core_vv1 source code.</title>
 <rect x="876" y="548" width="216" height="106" rx="14" fill="#ffffff" stroke="#c9ddf5" stroke-width="1.5"/>
 <text x="892" y="581" fill="#1764c0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" text-anchor="start">Dynamics</text>
 <text x="892" y="612" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">Integrator · thermostat</text>
 <text x="892" y="635" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">VVER · VRES</text>
+</a>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=domains&amp;function=native_dist_forward" target="_top" tabindex="0" aria-label="Open Domain work in the explorer: its component and native_dist_forward source code.">
+<title>Open Domain work in the explorer: its component and native_dist_forward source code.</title>
 <rect x="1104" y="548" width="216" height="106" rx="14" fill="#ffffff" stroke="#c9ddf5" stroke-width="1.5"/>
 <text x="1120" y="581" fill="#1764c0" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" text-anchor="start">Domain work</text>
 <text x="1120" y="612" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">Halo · returned forces</text>
 <text x="1120" y="635" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start">Atom migration</text>
+</a>
 <text x="648" y="708" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" text-anchor="start">Forces, energies and virials: 64-bit fixed-point sums</text>
 <path d="M410 342 L644 342" stroke="#1764c0" stroke-width="2" fill="none"/>
 <polygon points="644,342 635.0,347.0 635.0,337.0" fill="#1764c0"/>
@@ -61,6 +97,8 @@
 <text x="524" y="594" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="middle">Boundary data</text>
 <path d="M984 746 L984 792" stroke="#1764c0" stroke-width="2" fill="none"/>
 <polygon points="984,792 979.0,783.0 989.0,783.0" fill="#1764c0"/>
+<a class="diagram-block" href="https://wmarti.github.io/genesis-gpu-native/#component=transport&amp;function=gcx_begin" target="_top" tabindex="0" aria-label="Open GPU ↔ GPU exchanges in the explorer: its component and gcx_begin source code.">
+<title>Open GPU ↔ GPU exchanges in the explorer: its component and gcx_begin source code.</title>
 <rect x="52" y="794" width="1296" height="164" rx="24" fill="#f5f7fa" stroke="#dce5ef" stroke-width="1.5"/>
 <text x="80" y="830" fill="#15263c" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" text-anchor="start">GPU ↔ GPU exchanges</text>
 <text x="80" y="860" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" text-anchor="start">Halo · returned forces · atom migration · PME mesh transposes</text>
@@ -73,5 +111,6 @@
 <polygon points="330,909 339.0,904.0 339.0,914.0" fill="#1764c0"/>
 <text x="712" y="891" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" text-anchor="start">Same node: peer-to-peer or CUDA-aware MPI</text>
 <text x="712" y="922" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" text-anchor="start">Between nodes: MPI, direct or host staged</text>
+</a>
 <text x="52" y="994" fill="#52657a" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="start">Responsibilities are grouped here; the boxes do not prescribe timestep order.</text>
 </svg>

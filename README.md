@@ -146,21 +146,22 @@ ranks, two runs gave bitwise identical output in all 46 legs, on two GPU archite
 
 ## Everything stays on the GPU.
 
-[![Native GPU architecture: host responsibilities, persistent device state and GPU-to-GPU communication](doc/images/gpu-native-architecture.png)](https://wmarti.github.io/genesis-gpu-native/)
+Select a block to open its component and source code in the explorer.
 
-[Open interactive architecture →](https://wmarti.github.io/genesis-gpu-native/) · [Read architecture guide](doc/21_GPU_Native.rst#architecture-at-a-glance) · [Vector diagram (SVG)](doc/images/gpu-native-architecture.svg)
+<!-- BEGIN EXPLORER COMPONENTS -->
+<p align="center">
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=bridge&amp;function=gpu_core_setup"><img src="doc/images/explorer-components/bridge.svg" width="400" alt="Start a simulation — open component and source code"></a>
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=state&amp;function=gcn_device"><img src="doc/images/explorer-components/state.svg" width="400" alt="Keep atoms on the GPU — open component and source code"></a>
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=integrator&amp;function=gpu_core_vv1"><img src="doc/images/explorer-components/integrator.svg" width="400" alt="Advance the motion — open component and source code"></a>
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=neighbors&amp;function=gpu_core_rebuild"><img src="doc/images/explorer-components/neighbors.svg" width="400" alt="Find nearby atoms — open component and source code"></a>
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=forces&amp;function=native_force_join"><img src="doc/images/explorer-components/forces.svg" width="400" alt="Calculate local forces — open component and source code"></a>
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=pme&amp;function=native_pme_run"><img src="doc/images/explorer-components/pme.svg" width="400" alt="Solve long-range forces — open component and source code"></a>
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=domains&amp;function=native_dist_forward"><img src="doc/images/explorer-components/domains.svg" width="400" alt="Share the boundaries — open component and source code"></a>
+<a href="https://wmarti.github.io/genesis-gpu-native/#component=transport&amp;function=gcx_begin"><img src="doc/images/explorer-components/transport.svg" width="400" alt="Connect the GPUs — open component and source code"></a>
+</p>
+<!-- END EXPLORER COMPONENTS -->
 
-<details>
-<summary>Preview the interactive explorer</summary>
-
-<a href="https://wmarti.github.io/genesis-gpu-native/">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="doc/images/genesis-explorer-dark.jpg">
-    <img alt="GENESIS code explorer showing eight native GPU components, the source inspector and port history." src="doc/images/genesis-explorer-light.jpg">
-  </picture>
-</a>
-
-</details>
+[Open the full interactive diagram →](https://wmarti.github.io/genesis-gpu-native/architecture.html) · [Explore connections](https://wmarti.github.io/genesis-gpu-native/) · [Read the architecture guide](doc/21_GPU_Native.rst#architecture-at-a-glance)
 
 Forces, energies and virials are summed in 64-bit fixed point, so results never depend on thread scheduling. GPUs on a
 node exchange halos peer to peer; nodes use MPI. The exchange path follows a fixed rule from the hardware topology,

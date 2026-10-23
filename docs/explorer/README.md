@@ -25,14 +25,16 @@ The explorer is published at [wmarti.github.io/genesis-gpu-native](https://wmart
 
 ### How it fits the repository
 
-The original architecture PNG and SVG stay in `doc/images/` and remain the static overview in the README and native GPU guide. Clicking the README diagram opens the interactive map; the guide links directly to relevant components and complete files. The existing benchmark graphics remain inline, with links to the corresponding interactive comparisons. The viewer links back to the guide and its original diagram. Source and measurement evidence remain pinned to the recorded revision; links to the maintained user guide follow `main`.
+The README displays eight individually linked component cards using native GitHub image links. Every card opens its component's starting source definition in the explorer. This avoids SVG image limitations: GitHub's embedded images do not activate links inside an SVG.
 
-The expandable explorer preview uses GitHub's native `<details>` markup. It adds a preview without replacing the original diagram or stacking two large architecture images. There is one interactive application in `docs/explorer/`, deployed by GitHub Actions, rather than a separate documentation fork.
+The original architecture SVG is now itself interactive: its eleven blocks link to the matching source definitions. `architecture.html` embeds that SVG inline, so all links work on Pages. The guide's static PNG opens this page, and the viewer's **Interactive diagram** link opens it too. Existing benchmark graphics link to their interactive comparisons. Source and measurement evidence remain pinned to the recorded revision; the maintained user guide follows `main`.
+
+Run `python3 scripts/build_explorer_diagrams.py` after changing the diagram or component-card descriptions. The generator keeps the inline SVG, README cards and their SVG assets synchronized; CI runs its `--check` mode. All diagram assets live in this repository.
 
 ### Set up another deployment
 
 1. In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions**.
-2. Commit or merge the complete package into `main` in `wmarti/genesis-gpu-native`: `.gitattributes`, the root `README.md`, all of `docs/explorer/`, `doc/images/genesis-explorer-light.jpg`, `doc/images/genesis-explorer-dark.jpg`, the `scripts/*explorer*.py` files, `scripts/test_explorer_navigation.js`, and `.github/workflows/explorer-pages.yml`.
+2. Commit or merge the complete package into `main` in `wmarti/genesis-gpu-native`: `.gitattributes`, the root `README.md`, all of `docs/explorer/`, `doc/images/genesis-explorer-light.jpg`, `doc/images/genesis-explorer-dark.jpg`, `doc/images/explorer-components/`, `doc/images/gpu-native-architecture.svg`, `doc/21_GPU_Native.rst`, the `scripts/*explorer*.py` files, `scripts/test_explorer_navigation.js`, and `.github/workflows/explorer-pages.yml`.
 3. The push triggers **Actions → GENESIS explorer**. If needed, choose **Run workflow** on `main` to start it manually.
 4. Wait for both the verification and deployment jobs to succeed. Open the deployment URL and check **How it works**, **What changed**, **Performance**, and a source link. The expected address is [wmarti.github.io/genesis-gpu-native](https://wmarti.github.io/genesis-gpu-native/) unless a custom Pages domain is configured. Use the actual deployment URL for the README links if it differs.
 5. On the repository home page, open the gear beside **About**, enter the verified deployment URL in **Website**, and save. This adds a prominent explorer link beside the repository description.
