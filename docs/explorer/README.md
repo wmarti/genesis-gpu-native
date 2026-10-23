@@ -21,7 +21,7 @@ The included `.github/workflows/explorer-pages.yml` validates this site and depl
 
 The interactive explorer belongs on **GitHub Pages**, not inside the GitHub.com README. GitHub sanitizes rendered repository markup, including removal of script tags, so a README cannot run this JavaScript application or embed it as an interactive iframe. Keep the screenshot and link in the README. [GitHub's markup documentation](https://github.com/github/markup) describes that sanitization. [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages) hosts the HTML, CSS and JavaScript as a complete website.
 
-The explorer is published at [wmarti.github.io/genesis-gpu-native](https://wmarti.github.io/genesis-gpu-native/), with a launch link in the repository's About section. Changes to this directory on `main` are validated and deployed automatically.
+The explorer is published at [wmarti.github.io/genesis-gpu-native](https://wmarti.github.io/genesis-gpu-native/), with a launch link in the repository's About section. Changes to this directory on `main` are validated and deployed automatically. The workflow versions JavaScript and CSS URLs by content hash, and source files use their recorded hash, so returning browsers load a consistent set of assets after each deployment.
 
 ### How it fits the repository
 

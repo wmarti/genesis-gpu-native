@@ -12,7 +12,9 @@ function createFullSourceReader({index, manifest, esc, onLine, sourceURL}) {
     if(pending.has(path))return pending.get(path);
     const promise=new Promise((resolve,reject)=>{
       const script=document.createElement('script');
-      script.src=new URL(manifest.files[path].asset,document.baseURI).href;
+      const url=new URL(manifest.files[path].asset,document.baseURI);
+      if(url.protocol==='http:'||url.protocol==='https:')url.searchParams.set('v',manifest.files[path].sha256);
+      script.src=url.href;
       script.onload=()=>{
         script.remove();
         const text=window.GENESIS_SOURCE_FILES?.[path];

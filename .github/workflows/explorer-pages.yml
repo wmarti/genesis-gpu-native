@@ -45,6 +45,21 @@ jobs:
           NODE
       - name: Verify navigation and source deep links
         run: node --test scripts/test_explorer_navigation.js
+      - name: Version browser assets for consistent updates
+        run: |
+          python3 <<'PY'
+          import hashlib
+          import re
+          from pathlib import Path
+
+          site = Path('docs/explorer')
+          entry = site / 'index.html'
+          def version(match):
+              attribute, filename = match.groups()
+              digest = hashlib.sha256((site / filename).read_bytes()).hexdigest()[:16]
+              return f'{attribute}="./{filename}?v={digest}"'
+          entry.write_text(re.sub(r'(src|href)="\./([^"?]+\.(?:js|css))"', version, entry.read_text()))
+          PY
       - name: Verify complete source files, links, measurements, and assets
         run: python3 scripts/check_explorer.py
       - name: Upload static website
