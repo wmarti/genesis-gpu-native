@@ -1,0 +1,54 @@
+name: GENESIS explorer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/explorer/**'
+      - 'scripts/*explorer*.py'
+      - '.github/workflows/explorer-pages.yml'
+  pull_request:
+    paths:
+      - 'docs/explorer/**'
+      - 'scripts/*explorer*.py'
+      - '.github/workflows/explorer-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: explorer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check JavaScript syntax
+        run: node --check docs/explorer/app.js
+      - name: Verify source links, excerpts, measurements, and assets
+        run: python3 scripts/check_explorer.py
+      - name: Upload static website
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/explorer
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
