@@ -1,6 +1,6 @@
 # GENESIS native GPU explorer
 
-A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by the supplied graph layout. Open `index.html` directly, or serve this directory. The graph becomes readable cards in compact windows. No account, server API, build, analytics, external font, or package install is required.
+A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by the supplied graph layout. Open `index.html` directly, or serve this directory. The graph becomes readable cards in compact windows. Light and dark controls have distinct selected states, and the overview offers three visual entry points: CPU setup, GPU timesteps, and multi-GPU sharing. No account, server API, build, analytics, external font, or package install is required.
 
 ## Use
 
@@ -8,8 +8,8 @@ A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by 
 - Choose **Explore parts** to inspect selected definitions, then select a part to read its actual source excerpt.
 - Use **Find in source** or **Command/Ctrl K** to search 2,338 lexical symbols from 149 SPDYN files.
 - In a wide window, drag cards or the canvas; scroll or use +/− to zoom. **Fit** frames the graph and **Reset** restores its layout.
-- **Code movement** presents the eight original port commits and changed files.
-- **Measurements** compares recorded scaling, stock GENESIS performance, and validation. Select the simulation, precision, hardware and unit; unavailable combinations are omitted. All numbers link to the release evidence.
+- **What changed** presents the eight original port commits and changed files.
+- **Performance** compares recorded scaling, stock GENESIS performance, and validation. Select the simulation, GPU model, math precision and chart measure; unavailable choices are explained. The fastest configuration is selected by step time, and relative throughput is calculated from those timings before display rounding. All numbers link to the release evidence.
 - The appearance button switches between light and dark. Only that preference is stored locally.
 
 ## Publish on GitHub Pages

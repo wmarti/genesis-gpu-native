@@ -6,7 +6,7 @@
   --card-hover:#303538;
   --text:#ecedee;
   --muted:#a4a9af;
-  --faint:#747d85;
+  --faint:#9ba3ab;
   --line:#35393d;
   --accent:#acd4be;
   --accent-bg:#283c33;
@@ -408,7 +408,7 @@ kbd {
   pointer-events:none
 }
 .node.faded {
-  opacity:.28
+  opacity:1
 }
 .node:active:not(:disabled) {
   transform:none
@@ -1298,7 +1298,7 @@ body.light {
   --card-hover:#f0f4f2;
   --text:#252a2d;
   --muted:#616a71;
-  --faint:#78818a;
+  --faint:#626e78;
   --line:#e1e5e7;
   --accent:#32785a;
   --accent-bg:#eaf4ee;
@@ -1711,7 +1711,7 @@ body.light {
     font-size:10px
   }
   .node.faded {
-    opacity:.55
+    opacity:1
   }
   .connections,.node .port,#graph-bottom,#neighbor-control {
     display:none!important
@@ -1850,4 +1850,287 @@ body.light {
   .history-top .muted {
     display:none
   }
+}
+
+/* Readability, hierarchy and input feedback. */
+:root { --focus-ring: #acd4be; }
+body.light { --focus-ring: #32785a; }
+button, a, summary, select { touch-action: manipulation; }
+button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+#view-title:focus, .inspector-content h2:focus { outline: none; }
+#view-title, .inspector-content h2 { scroll-margin-top: 96px; }
+.sr-only {
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+.icon-button { min-width:36px; min-height:36px; border-radius:8px; }
+.icon-button:hover { background:var(--card); }
+.main-panel.alternate { background-image:none; }
+.inspector-tabs button { font-size:12px; }
+.inspector-content { padding-top:28px; }
+.inspector-content p { font-size:13px; line-height:1.7; }
+.inspector-content .lead { font-size:14px; }
+.inspector-content h3 { font-size:13px; }
+.button { min-height:38px; font-size:12px; }
+.info-row { font-size:12px; padding:13px 0; }
+.node { border-radius:14px; }
+.node h3 { font-size:17px; font-weight:600; line-height:1.3; }
+.node p { font-size:13px; line-height:1.6; }
+.node-icon { width:29px; height:29px; background:var(--accent-bg); }
+.node-icon svg { width:20px; height:20px; }
+.node-open { font-size:24px; line-height:1; opacity:.65; }
+.node-footer { font-size:10px; padding:10px 16px; }
+.node.faded { box-shadow:none; }
+.node.faded .node-icon { background:transparent; color:var(--muted); }
+.node.selected { background:var(--card-hover); }
+.search-result:hover, .search-result:focus { background:var(--card-hover); }
+.search-result:focus-visible { outline:2px solid var(--focus-ring); outline-offset:-2px; }
+.search-result strong { font-size:13px; }
+.search-result small { font-size:11px; line-height:1.5; }
+.component-link { min-height:44px; font-size:12px; }
+.file-link, .commit-file { font-size:11px; line-height:1.65; }
+pre { font-size:11px; }
+.timeline button { min-height:30px; font-size:10px; }
+.history-top { font-size:11px; }
+.history-top button { min-height:28px; font-size:11px; }
+.history-footer { height:102px; padding-top:11px; }
+.measurement-switch {
+  display:inline-flex; width:max-content; max-width:100%; gap:3px;
+  padding:4px; border-radius:10px; background:var(--panel);
+  border:1px solid var(--line); margin-bottom:26px;
+}
+.measurement-switch button {
+  min-height:34px; border:0; border-radius:7px; padding:7px 15px; font-size:12px;
+}
+.measurement-switch button.active { background:var(--card); color:var(--text); }
+.metric-controls {
+  display:grid; grid-template-columns:minmax(170px,1.25fr) minmax(160px,1.25fr) minmax(110px,.75fr);
+  gap:16px; width:100%; max-width:730px; margin-bottom:24px;
+}
+.select-label { font-size:11px; color:var(--muted); gap:9px; }
+.select-label select { min-height:42px; width:100%; border-radius:9px; font-size:13px; }
+.performance-card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px 28px 0; box-shadow:0 8px 30px #00000008; }
+.performance-card .chart-wrap { border:0; border-radius:0; background:transparent; padding:12px 0 8px; }
+.performance-card .chart { max-height:305px; }
+.performance-card .chart-grid { stroke-dasharray:none; opacity:.6; }
+.performance-card .chart-bar { fill:var(--muted); opacity:.28; }
+.performance-card .chart-bar.best { fill:var(--accent); opacity:1; }
+.performance-card .chart text { font-size:12px; }
+.performance-card .chart .chart-value { font-size:15px; font-weight:550; }
+.performance-card .chart-bar:hover { opacity:.8; }
+.performance-card .chart-bar.best:hover { opacity:1; }
+.performance-card .metric-summary strong { font-size:56px; font-weight:550; line-height:1.1; letter-spacing:-2px; }
+.performance-card .metric-summary { margin-bottom:7px; }
+.performance-card .metric-summary span { font-size:17px; color:var(--text); }
+.performance-card .chart-description { font-size:12px; }
+.metric-summary, .measure-table, .chart text, .validation-card strong { font-variant-numeric:tabular-nums; }
+.unit-switch { display:inline-flex; gap:3px; padding:3px; border:1px solid var(--line); border-radius:8px; }
+.unit-switch button { min-height:30px; padding:6px 11px; font-size:11px; border-radius:5px; color:var(--muted); }
+.unit-switch button[aria-pressed=true] { background:var(--card); color:var(--text); }
+.data-disclosure { border-top:1px solid var(--line); }
+.data-disclosure summary { min-height:54px; padding:18px 0; font-size:12px; color:var(--muted); cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.data-disclosure summary::-webkit-details-marker { display:none; }
+.data-disclosure summary::after { content:'+'; font-size:18px; font-weight:400; }
+.data-disclosure[open] summary::after { content:'−'; }
+.data-disclosure summary:hover { color:var(--text); }
+.data-disclosure .measure-table { margin:0 0 18px; font-size:12px; }
+.data-disclosure .measure-table th, .data-disclosure .measure-table td { padding:12px 2px; }
+.validation-card { border-radius:15px; padding:24px; }
+.validation-card h3 { font-size:13px; }
+.validation-card p { font-size:12px; }
+.validation-card a { font-size:11px; }
+.validation-card strong { font-size:31px; letter-spacing:-1px; }
+.validation-card .validation-caption { color:var(--text); font-size:12px; margin-top:-5px; margin-bottom:16px; }
+.commit-card { border-radius:13px; padding:22px; }
+.commit-card h3 { font-size:16px; }
+.commit-card p, .commit-card .commit-stats { font-size:12px; }
+.step-card h3 { font-size:16px; }
+.step-card p { font-size:13px; }
+.step-card small { font-size:11px; }
+@media(min-width:1101px) and (max-width:1500px) {
+  .workspace { grid-template-columns:minmax(0,1fr) 320px; }
+  .inspector-content { padding-left:22px; padding-right:22px; }
+  .inspector-content h2 { font-size:23px; }
+  .timeline button { font-size:9px; }
+}
+@media(max-width:1100px) {
+  .app-header { position:sticky; top:0; z-index:30; box-shadow:0 1px 0 var(--line); }
+  .node.faded { opacity:1; }
+  .node.faded .node-icon { background:var(--accent-bg); color:var(--accent); }
+  .inspector-tabs { position:sticky; top:68px; z-index:20; background:var(--panel); }
+  .performance-card { padding:24px 24px 0; }
+  .metric-controls { max-width:none; }
+  .history-footer { height:auto; }
+  .timeline { overflow-x:auto; gap:22px; padding:8px 5px; }
+  .timeline button { flex:0 0 115px; font-size:10px; line-height:1.4; }
+  .timeline button::after { display:none; }
+  .timeline::before { top:13px; width:1100px; right:auto; left:15px; }
+  .icon-button { min-width:40px; min-height:40px; }
+}
+@media(max-width:900px) {
+  .inspector-tabs { top:61px; }
+}
+@media(max-width:680px) {
+  #view-title, .inspector-content h2 { scroll-margin-top:126px; }
+  .app-header { height:114px; }
+  .inspector-tabs { top:114px; }
+  .main-nav button { min-height:36px; }
+  .measurement-switch { display:flex; width:100%; }
+  .measurement-switch button { flex:1; padding:9px 8px; font-size:11px; }
+  .metric-controls { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px 12px; }
+  .metric-controls .select-label:last-child { grid-column:1 / -1; max-width:calc(50% - 6px); }
+  .select-label select { min-height:44px; font-size:13px; padding-left:11px; }
+  .performance-card { padding:20px 18px 0; border-radius:15px; }
+  .performance-card .metric-summary strong { font-size:46px; }
+  .performance-card .metric-summary span { font-size:15px; }
+  .unit-switch button { min-height:36px; padding:7px 9px; }
+  .performance-card .chart text { font-size:14px; }
+  .performance-card .chart .chart-value { font-size:17px; }
+}
+@media(max-width:440px) {
+  #nodes { grid-template-columns:minmax(0,1fr); gap:13px; }
+  .node-main { padding:19px 18px 15px; }
+  .node h3 { font-size:17px; }
+  .node p { font-size:13px; min-height:0; line-height:1.65; }
+  .node-heading { margin-bottom:11px; gap:10px; }
+  .node-open { display:block; }
+  .node-footer { padding:10px 18px; font-size:10px; }
+  .node-footer>span:last-child { display:inline; }
+  .node-icon { width:29px; height:29px; }
+  .context-controls { display:none; }
+  .search-result>span:last-child { display:none; }
+}
+.performance-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:12px; }
+.metric-label { font-size:11px; color:var(--faint); margin-bottom:12px; }
+.metric-context { font-size:13px; color:var(--muted); }
+.performance-card .metric-unit { font-size:17px; letter-spacing:0; font-weight:400; margin-left:3px; }
+.performance-card .chart-description { margin-bottom:14px; color:var(--muted); }
+.performance-footer { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:15px 0 18px; font-size:11px; color:var(--muted); }
+.performance-footer a { white-space:nowrap; }
+.chart-direction { font-size:11px; color:var(--muted); margin-top:3px; }
+.performance-card .chart-baseline { opacity:1; }
+.performance-card .chart-axis-unit { font-size:10px; }
+.data-disclosure { margin-top:14px; }
+.data-disclosure .chart-footnote { margin-bottom:20px; font-size:11px; }
+.filter-notice { margin:-8px 0 20px; padding:12px 15px; border-left:2px solid var(--accent); background:var(--accent-bg); border-radius:0 8px 8px 0; color:var(--text); font-size:12px; }
+.validation-result { margin:20px 0 15px; }
+.validation-result strong { margin:0 0 10px; }
+.validation-result sup { font-size:18px; letter-spacing:0; }
+.validation-caption { display:block; }
+.validation-card .validation-scope { color:var(--text); font-size:11px; padding-bottom:12px; }
+.validation-card .validation-qualifier { margin-top:14px; }
+.validation-disclosure { margin-top:24px; }
+.qualification-list { padding-left:20px; font-size:12px; color:var(--muted); line-height:1.7; }
+.qualification-list li { padding:5px 0; }
+@media(max-width:680px) {
+  .performance-header { gap:16px; flex-wrap:wrap; }
+  .performance-header .unit-switch { order:-1; margin-left:auto; }
+  .performance-header>div:first-child { flex-basis:100%; }
+  .performance-footer { font-size:10px; align-items:flex-start; }
+  .data-disclosure .measure-table { font-size:11px; }
+  .performance-card .chart { min-height:175px; }
+}
+@media(max-width:1100px) { .inspector-content h2 { scroll-margin-top:140px; } }
+@media(max-width:680px) { .inspector-content h2 { scroll-margin-top:190px; } }
+@media(max-width:680px) {
+  .metric-controls .select-label:last-child { grid-column:auto; max-width:none; }
+  .metric-controls .select-label:first-child:nth-last-child(3) { grid-column:1 / -1; }
+  .performance-card .chart { min-height:0; }
+  .performance-card .chart-axis-unit { font-size:12px; }
+}
+
+/* Distinct control states and a clear path from choice to result. */
+:root {
+  --control-track:#191c1e;
+  --control-selected:#b5d9c5;
+  --control-selected-text:#153424;
+  --comparison-bar:#69767c;
+}
+body.light {
+  --control-track:#edf0ee;
+  --control-selected:#326b51;
+  --control-selected-text:#fff;
+  --comparison-bar:#a1b6aa;
+}
+.segmented { background:var(--control-track); border-color:transparent; }
+.segmented button { min-height:34px; font-weight:500; }
+.segmented button[aria-pressed=true],
+.light .segmented button[aria-pressed=true] {
+  background:var(--card); box-shadow:0 1px 5px #0002,inset 0 0 0 1px var(--line); color:var(--text);
+}
+.measurement-switch { background:var(--control-track); border:0; padding:4px; gap:4px; margin-bottom:24px; }
+.measurement-switch button { min-height:36px; font-weight:500; }
+.measurement-switch button[aria-pressed=true],
+.measurement-switch button[aria-pressed=true]:hover {
+  background:var(--control-selected); color:var(--control-selected-text); box-shadow:0 1px 3px #0002;
+}
+.metric-controls { max-width:none; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start; margin-bottom:26px; }
+.metric-controls.stock-controls { grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); max-width:650px; }
+.select-label { min-width:0; gap:9px; font-size:12px; font-weight:500; }
+.select-label small { font-size:11px; font-weight:400; color:var(--muted); line-height:1.5; }
+.select-control { display:block; position:relative; }
+.select-control select {
+  appearance:none; -webkit-appearance:none; display:block; min-height:46px; padding:10px 34px 10px 14px;
+  border-radius:10px; font-size:13px; text-overflow:ellipsis; cursor:pointer; box-shadow:0 1px 2px #00000004;
+}
+.select-control select:hover { border-color:var(--accent); }
+.select-control svg { position:absolute; right:13px; top:50%; transform:translateY(-50%); width:14px; height:14px; fill:none; stroke:var(--muted); stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
+.precision-switch { min-height:46px; display:flex; padding:4px; gap:4px; background:var(--control-track); border:1px solid var(--line); border-radius:10px; }
+.precision-switch button { flex:1; padding:6px 8px; border-radius:6px; font-size:12px; font-weight:500; color:var(--muted); }
+.precision-switch button[aria-pressed=true] { background:var(--card); color:var(--text); box-shadow:0 1px 4px #0002,inset 0 0 0 1px var(--line); }
+.precision-switch button:disabled { opacity:.5; cursor:not-allowed; }
+.unit-switch { background:var(--control-track); border:0; padding:4px; }
+.unit-switch button[aria-pressed=true] { background:var(--control-selected); color:var(--control-selected-text); box-shadow:0 1px 3px #0002; }
+.unit-switch button[aria-pressed=true]:hover { color:var(--control-selected-text); }
+.performance-card { padding-top:24px; }
+.performance-card .chart-bar { fill:var(--comparison-bar); opacity:1; }
+.performance-card .chart-bar.best { fill:var(--accent); }
+.performance-card .chart { max-height:255px; }
+.performance-card .chart-description { margin-bottom:16px; }
+.performance-card .metric-summary strong { font-weight:600; }
+.result-badge { display:inline-flex; color:var(--accent); background:var(--accent-bg); border-radius:20px; padding:7px 11px; font-size:11px; white-space:nowrap; }
+.chart-insight { display:flex; align-items:center; gap:11px; padding:12px 14px; border-radius:9px; background:var(--accent-bg); color:var(--text); margin-bottom:6px; font-size:12px; line-height:1.5; }
+.chart-insight>span:first-child { color:var(--accent); font-size:19px; flex-shrink:0; }
+.chart-insight strong { font-weight:600; }
+.performance-footer { font-size:11px; }
+.data-disclosure summary { color:var(--text); font-weight:500; }
+.overview-flow { margin:25px 0 20px; }
+.flow-step { position:relative; display:flex; width:100%; align-items:center; gap:12px; text-align:left; padding:12px 0; }
+.flow-step+.flow-step { border-top:1px solid var(--line); }
+.flow-icon { display:grid; place-items:center; height:35px; width:35px; border-radius:10px; background:var(--accent-bg); color:var(--accent); flex-shrink:0; }
+.flow-icon svg { width:22px; height:22px; }
+.flow-step>span:nth-child(2) { flex:1; }
+.flow-step small { display:block; font-size:9px; font-weight:600; letter-spacing:.7px; color:var(--faint); margin-bottom:4px; }
+.flow-step strong { display:block; font-size:12px; line-height:1.5; font-weight:600; }
+.flow-step>span:nth-child(2)>span { display:block; font-size:11px; line-height:1.5; color:var(--muted); margin-top:3px; }
+.flow-chevron { font-size:20px; color:var(--muted); }
+.flow-step:hover .flow-chevron { color:var(--accent); transform:translateX(2px); }
+.overview-stats { display:flex; gap:22px; padding:23px 0; border-bottom:1px solid var(--line); }
+.overview-stats>span { font-size:10px; color:var(--muted); }
+.overview-stats strong { display:block; color:var(--text); font-size:20px; font-weight:550; margin-bottom:4px; }
+.inspector-content .scope-note { margin:17px 0 12px; font-size:11px; }
+@media(max-width:680px) {
+  .metric-controls { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px 12px; }
+  .metric-controls>.select-label:first-child:nth-last-child(3) { grid-column:1 / -1; }
+  .metric-controls.stock-controls { max-width:none; grid-template-columns:1fr 1fr; }
+  .metric-controls.stock-controls>.select-label { grid-column:auto; }
+  .select-label small { font-size:10px; }
+  .select-control select { font-size:12px; padding-left:11px; }
+  .precision-switch button { font-size:12px; }
+  .measurement-switch button { font-size:11px; padding:8px 9px; }
+  .chart-insight { font-size:11px; padding:11px 12px; }
+  .performance-card .chart { max-height:280px; }
+  .performance-card .metric-summary strong { font-size:45px; }
+  .performance-footer { font-size:10px; line-height:1.6; }
+  .performance-header .result-badge { display:none; }
+}
+@media(min-width:681px) {
+  body[data-view=measurements] .canvas-heading { padding-top:26px; }
+  body[data-view=measurements] .alternate-view { padding-top:24px; }
+  .performance-header { margin-bottom:8px; }
+  .performance-card .chart-description { margin-bottom:12px; }
+  .performance-card .chart { max-height:230px; }
 }
