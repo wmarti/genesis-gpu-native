@@ -11,6 +11,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const external = (url, label, cls = '') => `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noreferrer">${label}</a>`;
   const sourceURL = (path, line, sha = A.sha) => `https://github.com/${A.repository}/blob/${sha}/${path}${line ? '#L' + line : ''}`;
+  const guideURL = `https://github.com/${A.repository}/blob/main/doc/21_GPU_Native.rst`;
   const byId = id => A.components.find(c => c.id === id);
   const labels = {
     bridge: { title:'Start a simulation', text:'Read the input, check what is supported, and start the native GPU path.', icon:'↳', badge:'Host · Fortran' },
@@ -382,7 +383,7 @@
         ['integrator','The GPU advances the atoms','Keep state, calculate forces, take a step.','GPU'],
         ['domains','Multiple GPUs share the work','Exchange boundary atoms and forces.','MULTI-GPU']
       ].map(([id,title,text,badge])=>`<button class="flow-step" data-select="${id}"><span class="flow-icon">${icon(id)}</span><span><small>${badge}</small><strong>${title}</strong><span>${text}</span></span><span class="flow-chevron" aria-hidden="true">›</span></button>`).join('')+'</div>'+
-      '<h3>Explore at your own depth</h3><p>Select a card for its role. Open its parts for real code, or follow a connection to the next responsibility.</p><div class="overview-stats"><span><strong>8</strong> components</span><span><strong>'+fmt(I.stats.files)+'</strong> source files</span><span><strong>'+fmt(I.stats.symbols)+'</strong> symbols</span></div><p class="scope-note">A curated source map, not a complete execution trace.</p>'+external(A.sourceGuide,'Read the native GPU guide ↗','subtle-link');
+      '<h3>Explore at your own depth</h3><p>Select a card for its role. Open its parts for real code, or follow a connection to the next responsibility.</p><div class="overview-stats"><span><strong>8</strong> components</span><span><strong>'+fmt(I.stats.files)+'</strong> source files</span><span><strong>'+fmt(I.stats.symbols)+'</strong> symbols</span></div><p class="scope-note">A curated source map, not a complete execution trace.</p><nav class="documentation-links" aria-label="Related documentation">'+external(guideURL,'User guide ↗','subtle-link')+external(guideURL+'#architecture-at-a-glance','Original diagram ↗','subtle-link')+'</nav>';
   }
   function componentInspector(c){
     const l=labels[c.id], edges=A.edges.filter(e=>e.source===c.id||e.target===c.id);
@@ -390,7 +391,7 @@
       `<div class="inspector-actions">${state.focus?`<button class="button primary" data-function="${G[c.id].featured}" data-component="${c.id}">Read the starting definition →</button>`:`<button class="button primary" data-drill="${c.id}">Explore ${c.functions.length} parts →</button>`}<button class="button" data-tab="code">Browse source</button></div>`+
       '<h3>What happens here</h3>'+c.details.map((d,i)=>`<div class="detail-item"><span>${String(i+1).padStart(2,'0')}</span><p>${esc(d)}</p></div>`).join('')+
       '<h3>Connected to</h3><div class="component-list">'+[...new Set(edges.map(e=>e.source===c.id?e.target:e.source))].map(id=>`<button class="component-link" data-select="${id}"><span>${esc(labels[id].title)}</span><span>→</span></button>`).join('')+'</div>'+
-      `<h3>Source files · ${c.paths.length}</h3>`+c.paths.map(p=>`<button class="file-link in-viewer-file" data-open-file="${esc(p)}">${esc(p.replace('src/spdyn/',''))} <span aria-hidden="true">→</span></button>`).join('');
+      `<h3>Source files · ${c.paths.length}</h3>`+c.paths.map(p=>`<button class="file-link in-viewer-file" data-open-file="${esc(p)}">${esc(p.replace('src/spdyn/',''))} <span aria-hidden="true">→</span></button>`).join('')+'<nav class="documentation-links" aria-label="Related documentation">'+external(guideURL+'#developer-notes','Read the developer guide ↗','subtle-link')+'</nav>';
   }
   function highlightSnippet(snippet,start){
     return snippet.split('\n').map((l,i)=>`<span class="code-line"><span class="line-number" aria-hidden="true">${start+i}</span><span class="line-source">${esc(l).replace(/\b(subroutine|function|end|type|integer|logical|real|double|void|int|float|return|if|else|const|struct|static|extern|call|intent|__global__|__device__)\b/gi,'<span class="code-keyword">$1</span>')||' '}</span></span>`).join('');

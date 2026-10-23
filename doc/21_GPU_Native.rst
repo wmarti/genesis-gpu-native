@@ -5,6 +5,9 @@
 Native GPU core (SPDYN)
 =======================================================================
 
+`Open interactive explorer <https://wmarti.github.io/genesis-gpu-native/>`_
+— architecture, source files and recorded performance.
+
 Overview
 =======================================================================
 
@@ -44,6 +47,9 @@ boundaries. Communication between ranks may stage through host memory
 when a direct GPU route is unavailable; the MD computations remain on
 the GPU. See the developer architecture and file map below for the
 implementation details.
+
+`Explore persistent GPU state and its source definitions
+<https://wmarti.github.io/genesis-gpu-native/#component=state&detail=steps>`_.
 
 .. _gpu_native_quick_start:
 
@@ -436,6 +442,9 @@ environment variable.
 File map (``src/spdyn``)
 -----------------------------------------------------------------------
 
+`Follow the setup and ABI bridge in the explorer
+<https://wmarti.github.io/genesis-gpu-native/#component=bridge&detail=steps>`_.
+
 ``sp_gpu_core.fpp``, ``sp_gpu_core_abi.fpp``, ``sp_gpu_core_step.fpp``
   Fortran bridge: descriptor conversion, ABI mirror, step loop and
   fallback decision.
@@ -443,6 +452,8 @@ File map (``src/spdyn``)
   Host context, grouped state import/export, canonical term records.
 ``gpu_core_native.h``, ``gpu_rebuild.cu``
   Device state; the rebuild (group sort, cell runs, pair list, masks).
+  `Inspect neighbor-list rebuilding
+  <https://wmarti.github.io/genesis-gpu-native/#component=neighbors&detail=steps>`_.
 ``gpu_force.cu``, ``gpu_nbcluster.cu``, ``gpu_nbcluster_fit.h``
   Real-space and bonded kernels; the cluster-pair kernel of MIXED, whose
   design follows the GROMACS GPU kernels as published.
@@ -451,6 +462,8 @@ File map (``src/spdyn``)
 ``gpu_pme.cu``, ``gpu_pme_recip*.{cu,hpp}``, ``gpu_pencil_fft.*``,
 ``gpu_layout_schedule.hpp``, ``gpu_mesh_exchange_*``
   PME: spread, solve, gather; pencil FFT (cuFFT) and the mesh transposes.
+  `Inspect PME source definitions
+  <https://wmarti.github.io/genesis-gpu-native/#component=pme&detail=steps>`_.
 ``gpu_domain.cu``, ``gpu_migration.cu``
   Domain geometry, halo, force return, atom migration.
 ``gpu_xchg.cu``, ``gpu_core_xchg.h``
@@ -479,6 +492,9 @@ Peer or staged path
   across PCIe and NVLink machines.  The elected routes are printed with
   each plan (``Native_Xchg> plan=``).  This choice moves bytes differently,
   never different bytes.
+
+`Explore the shared GPU communication layer
+<https://wmarti.github.io/genesis-gpu-native/#component=transport&detail=steps>`_.
 
 Everything else (kernel variants, launch shapes, cadences) is fixed by the
 input and the geometry.  ``tests/regression_test/test_gpu_native.py``

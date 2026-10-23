@@ -690,6 +690,12 @@ kbd {
 .subtle-link {
   font-size:11px
 }
+.documentation-links {
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 18px;
+  margin-top:18px
+}
 .component-list {
   display:flex;
   flex-direction:column

@@ -21,7 +21,15 @@ The included `.github/workflows/explorer-pages.yml` validates this site and depl
 
 The interactive explorer belongs on **GitHub Pages**, not inside the GitHub.com README. GitHub sanitizes rendered repository markup, including removal of script tags, so a README cannot run this JavaScript application or embed it as an interactive iframe. Keep the screenshot and link in the README. [GitHub's markup documentation](https://github.com/github/markup) describes that sanitization. [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages) hosts the HTML, CSS and JavaScript as a complete website.
 
-The root README is prepared with links to [the explorer's Pages URL](https://wmarti.github.io/genesis-gpu-native/). Those links become usable after a successful Pages deployment; including them in this package does not mean the site has already been published.
+The explorer is published at [wmarti.github.io/genesis-gpu-native](https://wmarti.github.io/genesis-gpu-native/), with a launch link in the repository's About section. Changes to this directory on `main` are validated and deployed automatically.
+
+### How it fits the repository
+
+The original architecture PNG and SVG stay in `doc/images/` and remain the static overview in the README and native GPU guide. Clicking the README diagram opens the interactive map; the guide links directly to relevant components and complete files. The existing benchmark graphics remain inline, with links to the corresponding interactive comparisons. The viewer links back to the guide and its original diagram. Source and measurement evidence remain pinned to the recorded revision; links to the maintained user guide follow `main`.
+
+The expandable explorer preview uses GitHub's native `<details>` markup. It adds a preview without replacing the original diagram or stacking two large architecture images. There is one interactive application in `docs/explorer/`, deployed by GitHub Actions, rather than a separate documentation fork.
+
+### Set up another deployment
 
 1. In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions**.
 2. Commit or merge the complete package into `main` in `wmarti/genesis-gpu-native`: `.gitattributes`, the root `README.md`, all of `docs/explorer/`, `doc/images/genesis-explorer-light.jpg`, `doc/images/genesis-explorer-dark.jpg`, the `scripts/*explorer*.py` files, `scripts/test_explorer_navigation.js`, and `.github/workflows/explorer-pages.yml`.

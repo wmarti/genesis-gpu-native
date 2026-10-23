@@ -95,20 +95,28 @@ Native-only modes, including Mixed precision, stop with the reason when the nati
 
 ## Fast. Measurably.
 
+<a href="https://wmarti.github.io/genesis-gpu-native/#view=measurements&amp;measure=stock">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/wmarti/genesis-gpu-native/releases/download/gpu-resident-v1/stock-dark.png">
   <img alt="Speedup over stock GENESIS 2.1.6, Mixed, RTX PRO 6000 Blackwell: STMV 15x, 22x, 23x and Cellulose 25x, 19x, 16x at 1, 2, 4 GPUs." src="https://github.com/wmarti/genesis-gpu-native/releases/download/gpu-resident-v1/stock-light.png">
 </picture>
+</a>
+
+*Click the chart to explore the stock comparison interactively.*
 
 Same inputs, same GPUs. Against upstream GENESIS 2.1.6 at its best rank and thread settings, this release is
 **15× to 25× faster in Mixed precision** and **2× to 11× faster in FP64**.
 
 ## Built to scale.
 
+<a href="https://wmarti.github.io/genesis-gpu-native/#view=measurements&amp;measure=scaling">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/wmarti/genesis-gpu-native/releases/download/gpu-resident-v1/scaling-dark.png">
   <img alt="STMV ns/day at 1, 2, 4 GPUs: B200 51, 85, 147; RTX PRO 6000 Blackwell 58, 95, 127; RTX 4090 42, 62, 80; A100 23, 40, 65; RTX 3090 20, 34, 54." src="https://github.com/wmarti/genesis-gpu-native/releases/download/gpu-resident-v1/scaling-light.png">
 </picture>
+</a>
+
+*Click the chart to explore GPU scaling interactively.*
 
 A million atoms of satellite tobacco mosaic virus, from 51 ns/day on one B200 to 147 ns/day on four. On STMV, every GPU
 model we tested gets faster with each GPU added, from the RTX 3090 to the B200. The smaller Cellulose system scales less
@@ -134,7 +142,16 @@ upstream's own `tolerance_single`: the largest deviation is 1.2e-5 (van der Waal
 **FP64 (full double).** Bitwise reproducible. Across a 16-case ensemble matrix, NVE to NPT, r-RESPA and T-REMD, on 1 to 4
 ranks, two runs gave bitwise identical output in all 46 legs, on two GPU architectures.
 
+[Explore the correctness results →](https://wmarti.github.io/genesis-gpu-native/#view=measurements&measure=validation)
+
 ## Everything stays on the GPU.
+
+[![Native GPU architecture: host responsibilities, persistent device state and GPU-to-GPU communication](doc/images/gpu-native-architecture.png)](https://wmarti.github.io/genesis-gpu-native/)
+
+[Open interactive architecture →](https://wmarti.github.io/genesis-gpu-native/) · [Read architecture guide](doc/21_GPU_Native.rst#architecture-at-a-glance) · [Vector diagram (SVG)](doc/images/gpu-native-architecture.svg)
+
+<details>
+<summary>Preview the interactive explorer</summary>
 
 <a href="https://wmarti.github.io/genesis-gpu-native/">
   <picture>
@@ -143,7 +160,7 @@ ranks, two runs gave bitwise identical output in all 46 legs, on two GPU archite
   </picture>
 </a>
 
-[Open the interactive explorer →](https://wmarti.github.io/genesis-gpu-native/) · [Read the architecture guide and diagram](doc/21_GPU_Native.rst#architecture-at-a-glance)
+</details>
 
 Forces, energies and virials are summed in 64-bit fixed point, so results never depend on thread scheduling. GPUs on a
 node exchange halos peer to peer; nodes use MPI. The exchange path follows a fixed rule from the hardware topology,
