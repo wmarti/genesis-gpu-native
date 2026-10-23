@@ -5,7 +5,8 @@ A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by 
 ## Use
 
 - Select a component to see its role, related components, and source files.
-- Choose **Explore parts** to inspect selected definitions, then select a part to read its actual source excerpt.
+- Choose **Explore parts** for a guide to what the component reads and makes available. Parts are grouped by responsibility; select one to open the wider source reader, use Previous/Next to browse, or toggle **Wrap lines**.
+- Browser Back/Forward restores views and exact source selections. Copy the URL to share a function or reopen it later. The in-page back button goes up one level: source, parts, map, overview.
 - Use **Find in source** or **Command/Ctrl K** to search 2,338 lexical symbols from 149 SPDYN files.
 - In a wide window, drag cards or the canvas; scroll or use +/− to zoom. **Fit** frames the graph and **Reset** restores its layout.
 - **What changed** presents the eight original port commits and changed files.
@@ -16,7 +17,7 @@ A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by 
 
 The included `.github/workflows/explorer-pages.yml` validates this site and deploys this directory at the repository's Pages root.
 
-1. Commit the explorer, both `scripts/*explorer*.py` files, and the workflow to `main` in `wmarti/genesis-gpu-native` (or merge a branch containing them).
+1. Commit the explorer, the `scripts/*explorer*.py` files and `scripts/test_explorer_navigation.js`, and the workflow to `main` in `wmarti/genesis-gpu-native` (or merge a branch containing them).
 2. In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions**. Repository administrator access is required to change this setting.
 3. In **Actions → GENESIS explorer**, choose **Run workflow** on `main`, or push a change to one of the tracked explorer paths.
 4. After the deploy job succeeds, the site will be at `https://wmarti.github.io/genesis-gpu-native/` unless the repository has a custom Pages domain.
@@ -32,6 +33,8 @@ From the repository root:
 ```sh
 python3 -m http.server 8765 --bind 127.0.0.1 --directory docs/explorer
 node --check docs/explorer/app.js
+node --check docs/explorer/navigation.js
+node --test scripts/test_explorer_navigation.js
 python3 scripts/check_explorer.py
 ```
 
@@ -41,6 +44,7 @@ Open `http://127.0.0.1:8765/`. The tests require the full repository history bec
 
 - Source snapshot: `34f4a37ced7b1db375beaac87b867ea7d0ac5563`.
 - `source-map.js` contains eight curated responsibilities, 48 source excerpts and 13 evidenced relationships. This is not a complete compiler-derived call graph or execution trace.
+- `component-guide.js` groups all 48 definitions into reading guides, with context and conditional paths. Groups do not represent an execution sequence.
 - `source-index.js` contains a lexical inventory, including interface declarations. File line counts include comments and blank lines. Symbol counts are not test coverage.
 - `measurements.js` transcribes published release results and history. Benchmarks were **not rerun** for this website. The native measurements identify source `29292944` and release documentation tip `218b65ff`; current source history ends at the replacement documentation commit `34f4a37`. These are not sequential release commits.
 - Kernel-specific timings are not provided because the committed evidence does not supply them.

@@ -6,11 +6,13 @@ on:
     paths:
       - 'docs/explorer/**'
       - 'scripts/*explorer*.py'
+      - 'scripts/*explorer*.js'
       - '.github/workflows/explorer-pages.yml'
   pull_request:
     paths:
       - 'docs/explorer/**'
       - 'scripts/*explorer*.py'
+      - 'scripts/*explorer*.js'
       - '.github/workflows/explorer-pages.yml'
   workflow_dispatch:
 
@@ -29,7 +31,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check JavaScript syntax
-        run: node --check docs/explorer/app.js
+        run: |
+          for file in docs/explorer/*.js; do node --check "$file"; done
+      - name: Verify navigation and source deep links
+        run: node --test scripts/test_explorer_navigation.js
       - name: Verify source links, excerpts, measurements, and assets
         run: python3 scripts/check_explorer.py
       - name: Upload static website

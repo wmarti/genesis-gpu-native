@@ -124,6 +124,24 @@ def hardware_id(label):
     return None
 
 
+def verify_component_guides(data, architecture, sha, errors):
+    if data.get("sourceCommit") != sha:
+        errors.append("Component guides and lexical index refer to different snapshots")
+    guides = data.get("components", {})
+    if set(guides) != {component["id"] for component in architecture["components"]}:
+        errors.append("Component guide coverage differs from architecture")
+    for component in architecture["components"]:
+        guide = guides.get(component["id"], {})
+        expected = {function["id"] for function in component["functions"]}
+        grouped = [function for group in guide.get("groups", []) for function in group["functions"]]
+        if set(grouped) != expected or len(grouped) != len(expected):
+            errors.append(f"Component guide must include every part exactly once: {component['id']}")
+        if guide.get("featured") not in expected or not set(guide.get("conditions", {})).issubset(expected):
+            errors.append(f"Component guide refers to an unknown part: {component['id']}")
+        if any(not guide.get(field) for field in ("summary", "reads", "provides", "takeaway")):
+            errors.append(f"Component guide lacks explanatory content: {component['id']}")
+
+
 def benchmark_rows(lines):
     """Independently read the documented table cells, preserving their context."""
     result, section, tuned = {}, "", False
@@ -321,7 +339,9 @@ def main() -> None:
         try:
             architecture = load_data("source-map.js")
             measurements = load_data("measurements.js")
+            guides = load_data("component-guide.js")
             reference_count += verify_architecture(architecture, index["commit"], errors)
+            verify_component_guides(guides, architecture, index["commit"], errors)
             reference_count += verify_measurements(measurements, index["commit"], errors)
             history_count = verify_history(measurements, index["commit"], errors)
         except (OSError, ValueError, KeyError, IndexError, subprocess.CalledProcessError) as error:

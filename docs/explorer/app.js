@@ -4,6 +4,8 @@
   const A = window.GENESIS_ARCHITECTURE;
   const M = window.GENESIS_MEASUREMENTS;
   const I = window.GENESIS_SOURCE_INDEX;
+  const G = window.GENESIS_COMPONENT_GUIDE.components;
+  let wrapSource = true;
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -37,7 +39,10 @@
       if (!target) return;
       target.tabIndex = -1;
       target.focus({preventScroll:true});
-      if (scroll) target.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+      if (scroll) {
+        const anchor=target.closest('#inspector-content')?.querySelector('.reader-nav')||target;
+        anchor.scrollIntoView({behavior:'auto',block:'start'});
+      }
     });
   }
   const defaults = {bridge:[30,80],state:[30,365],integrator:[340,80],domains:[340,365],neighbors:[650,25],forces:[650,335],pme:[960,80],transport:[960,365]};
@@ -50,52 +55,59 @@
   const intro = (eyebrow,title,text) => `<p class="eyebrow">${esc(eyebrow)}</p><h2>${esc(title)}</h2><p class="lead">${esc(text)}</p>`;
   const selectedComponent = () => byId(state.component);
   function toast(message) { $('#toast').textContent=message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),2300); }
-  function syncHash() {
-    const p = new URLSearchParams();
-    if (state.view !== 'architecture') p.set('view',state.view);
-    if (state.component) p.set('component',state.component);
-    if (state.focus) p.set('detail','steps');
-    if (state.commit) p.set('commit',state.commit);
-    if (state.view==='measurements') { p.set('unit',state.unit); p.set('deck',state.deck);p.set('precision',state.precision);p.set('hardware',state.hardware);p.set('measure',state.measure); }
-    const h = p.toString();
-    try { history.replaceState(null,'',location.pathname+location.search+(h?'#'+h:'')); } catch (_) { /* file previews can restrict history */ }
-  }
-  function readHash() {
-    const p = new URLSearchParams(location.hash.slice(1));
-    if (['architecture','movement','measurements'].includes(p.get('view'))) state.view=p.get('view');
-    if (byId(p.get('component'))) {state.component=p.get('component');state.view='architecture';}
-    if (p.get('detail')==='steps' && state.component) state.focus=state.component;
-    if (M.history.some(c=>c.sha===p.get('commit'))) state.commit=p.get('commit');
-    for (const key of ['deck','precision','hardware','measure','unit']) {
-      const values={deck:['tuned','g92','cellulose'],precision:['Mixed','FP64'],hardware:M.hardware.map(h=>h.id),measure:['scaling','stock','validation'],unit:['nsPerDay','msPerStep']}[key];
-      if(values.includes(p.get(key)))state[key]=p.get(key);
+  const explorerNavigation = createExplorerNavigation({
+    architecture:A, measurements:M, sourceIndex:I,
+    getState:()=>state, setState:next=>{state=next;}, render,
+    focus:(route, meta)=>{
+      const selector=route.symbol || (route.component && !route.focus) || route.commit
+        ? '#inspector-content h2' : '#view-title';
+      focusContent(selector, !meta.restoring && innerWidth<=1100);
+      if(route.symbol&&innerWidth>1100)requestAnimationFrame(()=>$('.part-row.active')?.scrollIntoView({block:'nearest',inline:'nearest'}));
     }
+  });
+  function navigateRender(options={}) { return explorerNavigation.commit(options); }
+  function navigateBack() { return explorerNavigation.goUp(); }
+  function updateNavigationBackButton() {
+    const button=$('#back');
+    button.disabled=!explorerNavigation.canGoUp();
+    button.setAttribute('aria-label',explorerNavigation.backLabel());
+    button.title=explorerNavigation.backLabel();
   }
   function changeView(view) {
-    state.view=view;state.component=null;state.focus=null;state.symbol=null;state.tab='details';
-    if(view!=='movement')state.commit=null;
-    render();
-    focusContent('#view-title',innerWidth<=1100);
+    explorerNavigation.navigate({view,component:null,focus:null,symbol:null,
+      commit:null,tab:'details'}, {focus:true});
   }
-  function selectComponent(id, drill = false) {
-    if (!byId(id)) return;
-    state.view='architecture';state.component=id;state.focus=drill?id:null;state.tab='details';state.symbol=null;state.commit=null;
-    render();
-    focusContent(drill?'#view-title':'#inspector-content h2',innerWidth<=1100);
+  function selectComponent(id,drill=false) {
+    if(!byId(id))return;
+    explorerNavigation.navigate({view:'architecture',component:id,
+      focus:drill?id:null,symbol:null,commit:null,tab:'details'}, {focus:true});
   }
-  function selectCommit(sha) { state.view='movement';state.commit=sha;state.component=null;state.focus=null;state.symbol=null;state.tab='details';render();focusContent('#inspector-content h2',innerWidth<=1100); }
-  function selectSymbol(symbol, componentId) {
-    state.symbol=symbol;state.view='architecture';state.commit=null;state.tab='code';
-    state.component=componentId || A.components.find(c=>c.functions.some(f=>f.path===symbol.path && f.line===symbol.line))?.id || null;
-    if(state.focus&&state.focus!==state.component)state.focus=null;
-    render();
-    focusContent('#inspector-content h2',innerWidth<=1100);
+  function selectCommit(sha) {
+    if(!M.history.some(c=>c.sha===sha))return;
+    explorerNavigation.navigate({view:'movement',commit:sha,component:null,
+      focus:null,symbol:null,tab:'details'}, {focus:true});
+  }
+  function selectSymbol(symbol,componentId) {
+    const trusted=explorerNavigation.resolveSymbol(symbol);
+    if(!trusted)return;
+    explorerNavigation.navigate({view:'architecture',symbol:trusted,
+      component:componentId||null,focus:null,commit:null,tab:'code'}, {focus:true});
+    // normalize() supplies a valid owner and focus=owner automatically.
+  }
+  function returnToMap() {
+    explorerNavigation.navigate({view:'architecture',symbol:null,focus:null,
+      tab:'details',commit:null}, {focus:true});
+  }
+  function clearSelectedSymbol() {
+    if(state.symbol)navigateBack();
   }
   function render() {
     const focusedId = document.activeElement?.id;
     const dataWasOpen = $('.data-disclosure:not(.validation-disclosure)')?.open;
     document.body.dataset.view = state.view;
-    $('.history-footer').hidden = state.view !== 'architecture';
+    document.body.dataset.detail = Boolean(state.focus);
+    document.body.dataset.reading = Boolean(state.symbol && state.tab === 'code');
+    $('.history-footer').hidden = state.view !== 'architecture' || Boolean(state.focus || state.symbol);
     $$('.main-nav button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===state.view));
     $$('.inspector-tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tab===state.tab));
     $('#back').disabled=!state.component && state.view==='architecture' && !state.symbol;
@@ -110,7 +122,7 @@
       const c=byId(state.focus);
       $('#view-eyebrow').textContent=c?'INSIDE THE COMPONENT':'MOLECULAR DYNAMICS · ON THE GPU';
       $('#view-title').textContent=c?titleOf(c):'A whole simulation. One connected system.';
-      $('#view-subtitle').textContent=c?'Each part links to its actual definition. Select one to read the source.':'Follow a step from input to motion. Select a component to see how it works.';
+      $('#view-subtitle').textContent=c?G[c.id].summary:'Follow a step from input to motion. Select a component to see how it works.';
       $('#scope-chip').textContent=c?`${c.functions.length} source definitions`:'8 components';
       if(c)renderSteps(c);else renderGraph();
     } else if(state.view==='movement') {
@@ -120,7 +132,7 @@
       $('#view-eyebrow').textContent='PUBLISHED RESULTS · GPU-RESIDENT-V1';$('#view-title').textContent='Measured performance.';
       $('#view-subtitle').textContent='Compare GPU scaling, stock performance, and correctness under documented conditions.';$('#scope-chip').textContent='October 2026';renderMeasurements();
     }
-    renderInspector();renderTimeline();syncHash();
+    renderInspector();renderTimeline();updateNavigationBackButton();
     if(dataWasOpen && $('.data-disclosure:not(.validation-disclosure)'))$('.data-disclosure:not(.validation-disclosure)').open=true;
     if(focusedId)document.getElementById(focusedId)?.focus({preventScroll:true});
   }
@@ -168,7 +180,11 @@
   }
   function zoom(factor,x,y){const v=$('#graph-viewport');x??=v.clientWidth/2;y??=v.clientHeight/2;const s=Math.max(.2,Math.min(2,camera.scale*factor));const r=s/camera.scale;camera.x=x-(x-camera.x)*r;camera.y=y-(y-camera.y)*r;camera.scale=s;applyCamera();}
   function renderSteps(c){
-    $('#alternate-view').innerHTML=`<div class="step-grid">${c.functions.map((f,i)=>`<button class="step-card ${state.symbol?.id===f.id?'active':''}" data-function="${esc(f.id)}" data-component="${c.id}"><span>${String(i+1).padStart(2,'0')} &nbsp; ${esc(f.language)}</span><h3>${esc(f.title)}</h3><p>${esc(f.description)}</p><small>${esc(f.name)} →</small></button>`).join('')}</div><p class="graph-caption">Selected responsibilities, grouped for readability. These cards are not a complete execution trace.</p>`;
+    const guide=G[c.id], first=c.functions.find(f=>f.id===guide.featured);
+    $('#alternate-view').innerHTML=`<div class="component-toolbar"><button class="back-to-map" data-return-map>← Back to map</button><span>${c.functions.length} source parts</span></div><div class="component-summary"><div><span class="summary-label">Works with</span><p>${guide.reads.map(esc).join('<br>')}</p></div><span class="summary-arrow" aria-hidden="true">→</span><div><span class="summary-label">Makes available</span><p>${guide.provides.map(esc).join('<br>')}</p></div></div><p class="component-takeaway">${esc(guide.takeaway)}</p><div class="parts-heading"><h2>Explore the parts</h2><button data-function="${esc(first.id)}" data-component="${c.id}">Start with ${esc(first.name)} <span aria-hidden="true">→</span></button></div><div class="part-groups">${guide.groups.map(group=>`<section class="part-group"><h3>${esc(group.title)}</h3><div class="part-list">${group.functions.map(id=>{
+      const f=c.functions.find(x=>x.id===id), selected=state.symbol?.path===f.path&&state.symbol?.line===f.line;
+      return `<button class="part-row ${selected?'active':''}" data-function="${esc(f.id)}" data-component="${c.id}" aria-pressed="${selected}"><span class="part-symbol" aria-hidden="true">{ }</span><span class="part-content"><span class="part-title">${esc(f.title)}</span><span class="part-description">${esc(f.description)}</span><span class="part-meta"><code>${esc(f.name)}</code>${guide.conditions[f.id]?`<span class="condition-chip">${esc(guide.conditions[f.id])}</span>`:''}</span></span><span class="part-chevron" aria-hidden="true">${selected?'●':'›'}</span></button>`;
+    }).join('')}</div></section>`).join('')}</div><p class="graph-caption">Grouped by responsibility. These parts are not an execution sequence.</p>`;
   }
   function renderTimeline(){
     $('#timeline').innerHTML=M.history.map(c=>`<button title="${esc(c.subject)}" data-commit="${c.sha}" data-short="${c.shortSha.slice(0,5)}" class="${state.commit===c.sha?'active':''}">${esc(c.label)}</button>`).join('');
@@ -324,23 +340,28 @@
   function componentInspector(c){
     const l=labels[c.id], edges=A.edges.filter(e=>e.source===c.id||e.target===c.id);
     return intro(l.badge,l.title,c.description)+
-      `<div class="inspector-actions"><button class="button primary" data-drill="${c.id}">Explore ${c.functions.length} parts →</button><button class="button" data-tab="code">Browse source</button></div>`+
+      `<div class="inspector-actions">${state.focus?`<button class="button primary" data-function="${G[c.id].featured}" data-component="${c.id}">Read the starting definition →</button>`:`<button class="button primary" data-drill="${c.id}">Explore ${c.functions.length} parts →</button>`}<button class="button" data-tab="code">Browse source</button></div>`+
       '<h3>What happens here</h3>'+c.details.map((d,i)=>`<div class="detail-item"><span>${String(i+1).padStart(2,'0')}</span><p>${esc(d)}</p></div>`).join('')+
       '<h3>Connected to</h3><div class="component-list">'+[...new Set(edges.map(e=>e.source===c.id?e.target:e.source))].map(id=>`<button class="component-link" data-select="${id}"><span>${esc(labels[id].title)}</span><span>→</span></button>`).join('')+'</div>'+
       `<h3>Source files · ${c.paths.length}</h3>`+c.paths.map(p=>external(sourceURL(p),esc(p.replace('src/spdyn/',''))+' ↗','file-link')).join('');
   }
   function highlightSnippet(snippet,start){
-    return snippet.split('\n').map((l,i)=>`<span class="line-number">${start+i}</span>${esc(l).replace(/\b(subroutine|function|end|type|integer|logical|real|double|void|int|float|return|if|else|const|struct|static|extern|call|intent|__global__|__device__)\b/gi,'<span class="code-keyword">$1</span>')}`).join('\n');
+    return snippet.split('\n').map((l,i)=>`<span class="code-line"><span class="line-number" aria-hidden="true">${start+i}</span><span class="line-source">${esc(l).replace(/\b(subroutine|function|end|type|integer|logical|real|double|void|int|float|return|if|else|const|struct|static|extern|call|intent|__global__|__device__)\b/gi,'<span class="code-keyword">$1</span>')||' '}</span></span>`).join('');
   }
+  const orderedParts=c=>G[c.id].groups.flatMap(group=>group.functions).map(id=>c.functions.find(f=>f.id===id));
   function codeInspector(){
     const c=selectedComponent(),f=state.symbol;
     if(f){
       const curated=A.components.flatMap(c=>c.functions).find(x=>x.path===f.path&&x.line===f.line);
       const actual=curated||f;
-      return intro(actual.language||actual.kind||'SOURCE DEFINITION',actual.title||actual.name,actual.description||'An indexed definition in the SPDYN source.')+
-        external(sourceURL(actual.path,actual.line),esc(actual.path)+`:${actual.line} ↗`,'file-link')+
-        (actual.snippet?`<pre><code>${highlightSnippet(actual.snippet,actual.line)}</code></pre><p class="chart-footnote">Excerpt from ${A.sha.slice(0,7)}. Open GitHub for the complete definition.</p>`:'<div class="callout"><strong>Open the full definition</strong><p>The searchable index records definitions and their exact source locations. Full source is available at the link below.</p></div>')+
-        `<div class="inspector-actions">${external(sourceURL(actual.path,actual.line),'Open on GitHub ↗','button primary')}${c?'<button class="button" data-clear-symbol>All component source</button>':''}</div>`;
+      const parts=c?orderedParts(c):[], position=parts.findIndex(p=>p.path===actual.path&&p.line===actual.line);
+      const adjacent=(offset,label)=>{const next=parts[position+offset];return `<button class="reader-arrow" ${next?`data-function="${esc(next.id)}" data-component="${c.id}" aria-label="${label}: ${esc(next.title)}"`:`disabled aria-label="${label}"`}>${offset<0?'‹':'›'}</button>`;};
+      const nav=c?`<div class="reader-nav"><button data-clear-symbol>← Back to parts</button>${position>=0?`<span>${position+1} of ${parts.length}</span>${adjacent(-1,'Previous part')}${adjacent(1,'Next part')}`:''}</div>`:'';
+      const condition=c&&G[c.id].conditions[actual.id];
+      return nav+intro((actual.language||actual.kind||'CODE')+' SOURCE',actual.title||actual.name,actual.description||'An indexed definition in the SPDYN source.')+
+        (condition?`<p class="reader-condition">${esc(condition)}</p>`:'')+
+        (actual.snippet?`<section class="source-panel" aria-label="Source excerpt"><div class="source-toolbar"><span><strong>${esc(actual.path.split('/').pop())}</strong><small>Lines ${actual.line}–${actual.endLine}</small></span><button id="wrap-source" data-wrap-source aria-pressed="${wrapSource}">Wrap lines</button></div><pre class="source-code ${wrapSource?'wrapped':''}" tabindex="0" aria-label="${esc(actual.name)} source code"><code>${highlightSnippet(actual.snippet,actual.line)}</code></pre><div class="source-caption">Source excerpt · ${A.sha.slice(0,7)}</div></section>`:'<div class="callout"><strong>Open the full definition</strong><p>The searchable index records definitions and their exact source locations. Full source is available at the link below.</p></div>')+
+        `<div class="inspector-actions">${external(sourceURL(actual.path,actual.line),'Open full source on GitHub ↗','button primary')}</div><p class="source-path">${esc(actual.path)}</p>`;
     }
     if(!c)return intro('SOURCE INDEX','Find your way into the code.',`${fmt(I.stats.symbols)} symbols across ${I.stats.files} SPDYN files. Search by name or path.`)+'<div class="inspector-actions"><button class="button primary" data-search>Search source ⌘ K</button></div><p>The index includes Fortran, C, C++ and CUDA definitions, plus Fortran interface declarations. It is a lexical index, not compiler analysis.</p><h3>Start with a component</h3>'+A.components.map(c=>`<button class="component-link" data-source-component="${c.id}"><span>${esc(titleOf(c))}</span><span>${c.functions.length} →</span></button>`).join('');
     return intro('SOURCE · '+A.sha.slice(0,7),titleOf(c),`${c.functions.length} selected definitions. Select one for an excerpt and its exact source location.`)+c.functions.map(f=>`<button class="component-link" data-function="${esc(f.id)}" data-component="${c.id}"><span><strong style="font-weight:500">${esc(f.title)}</strong><small style="display:block;margin-top:6px;color:var(--faint);font-family:monospace;font-size:9px;overflow-wrap:anywhere">${esc(f.name)}</small></span><span>→</span></button>`).join('');
@@ -388,19 +409,22 @@
     if(b.dataset.view){changeView(b.dataset.view);return;}
     if(b.dataset.select){selectComponent(b.dataset.select);return;}
     if(b.dataset.drill){selectComponent(b.dataset.drill,true);return;}
-    if(b.dataset.tab){state.tab=b.dataset.tab;$$('.inspector-tabs button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.tab===state.tab));renderInspector();if(!b.closest('.inspector-tabs'))focusContent('#inspector-content h2');return;}
+    if(b.dataset.tab){state.tab=b.dataset.tab;navigateRender();if(!b.closest('.inspector-tabs'))focusContent('#inspector-content h2');return;}
     if(b.dataset.commit){selectCommit(b.dataset.commit);return;}
     if(b.dataset.function){const c=byId(b.dataset.component),f=c.functions.find(f=>f.id===b.dataset.function);selectSymbol(f,c.id);return;}
-    if(b.dataset.sourceComponent){selectComponent(b.dataset.sourceComponent);state.tab='code';render();return;}
-    if(b.hasAttribute('data-clear-symbol')){state.symbol=null;renderInspector();focusContent('#inspector-content h2');return;}
+    if(b.dataset.sourceComponent){explorerNavigation.navigate({view:'architecture',component:b.dataset.sourceComponent,focus:b.dataset.sourceComponent,symbol:null,commit:null,tab:'code'},{focus:true});return;}
+    if(b.hasAttribute('data-clear-symbol')){clearSelectedSymbol();return;}
+    if(b.hasAttribute('data-return-map')){returnToMap();return;}
     if(b.hasAttribute('data-search')){openSearch();return;}
-    if(b.dataset.unit){state.unit=b.dataset.unit;render();return;}
-    if(b.dataset.precision&&!b.disabled){state.precision=b.dataset.precision;render();document.getElementById('precision-'+state.precision)?.focus({preventScroll:true});return;}
-    if(b.dataset.measure){state.measure=b.dataset.measure;state.tab='details';render();return;}
+    if(b.hasAttribute('data-wrap-source')){wrapSource=!wrapSource;$('.source-code')?.classList.toggle('wrapped',wrapSource);b.setAttribute('aria-pressed',wrapSource);return;}
+    if(b.dataset.unit){state.unit=b.dataset.unit;navigateRender();return;}
+    if(b.dataset.precision&&!b.disabled){state.precision=b.dataset.precision;navigateRender();document.getElementById('precision-'+state.precision)?.focus({preventScroll:true});return;}
+    if(b.dataset.measure){state.measure=b.dataset.measure;state.tab='details';navigateRender();return;}
     if(b.hasAttribute('data-result')){const r=searchItems[Number(b.dataset.result)];$('#search-dialog').close();if(r.type==='component')selectComponent(r.component.id);else selectSymbol(r.symbol);return;}
   });
   $('#home').onclick=$('#overview').onclick=()=>changeView('architecture');
-  $('#back').onclick=()=>{if(state.focus){state.focus=null;state.symbol=null;state.tab='details';render();focusContent('#view-title',innerWidth<=1100);}else changeView('architecture');};
+  $('#back').onclick=navigateBack;
+  $('.skip-link').onclick=e=>{e.preventDefault();$('#workspace').focus();};
   $('#history-open').onclick=()=>changeView('movement');
   $('#neighbors').onchange=updateConnections;
   $('#zoom-in').onclick=()=>zoom(1.2);$('#zoom-out').onclick=()=>zoom(1/1.2);$('#fit').onclick=fit;
@@ -416,8 +440,8 @@
   $('#theme').onclick=()=>setTheme(!document.body.classList.contains('light'));
   $('#alternate-view').addEventListener('change',e=>{
     const ids={'metric-deck':'deck','metric-hardware':'hardware','metric-precision':'precision','metric-unit':'unit'};
-    if(ids[e.target.id]){const id=e.target.id;state[ids[id]]=e.target.value;render();document.getElementById(id)?.focus({preventScroll:true});}
-    if(e.target.id==='metric-system'){state.deck=e.target.value==='Cellulose'?'cellulose':'tuned';render();$('#metric-system')?.focus({preventScroll:true});}
+    if(ids[e.target.id]){const id=e.target.id;state[ids[id]]=e.target.value;navigateRender();document.getElementById(id)?.focus({preventScroll:true});}
+    if(e.target.id==='metric-system'){state.deck=e.target.value==='Cellulose'?'cellulose':'tuned';navigateRender();$('#metric-system')?.focus({preventScroll:true});}
   });
   const viewport=$('#graph-viewport');
   viewport.addEventListener('pointerdown',e=>{
@@ -438,12 +462,13 @@
   viewport.addEventListener('dblclick',e=>{const n=e.target.closest('[data-node]');if(n)selectComponent(n.dataset.node,true);});
   document.addEventListener('keydown',e=>{
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();if(!$('#search-dialog').open)openSearch();return;}
-    if(e.key==='Escape'&&!$('dialog[open]')){if(state.focus){state.focus=null;state.symbol=null;state.tab='details';render();focusContent('#view-title',innerWidth<=1100);}else if(state.component||state.symbol)changeView('architecture');}
-    if(e.target.matches('input,select,textarea'))return;
+    const editing=e.target.closest('input,select,textarea,[contenteditable="true"]');
+    if(e.key==='Escape'&&!$('dialog[open]')&&!editing){if(navigateBack())e.preventDefault();return;}
+    if(editing)return;
     if(state.view==='architecture'&&!state.focus&&!$('dialog[open]')){if(e.key==='+'||e.key==='=')zoom(1.2);if(e.key==='-')zoom(1/1.2);if(e.key.toLowerCase()==='f')fit();}
   });
   $('#revision').textContent=A.sha.slice(0,7);$('#revision').href=`https://github.com/${A.repository}/commit/${A.sha}`;$('#revision').title='Inspected source revision';
   new ResizeObserver(()=>{if(!viewport.hidden){fit();updateConnections();}}).observe(viewport);
   matchMedia('(max-width:680px)').addEventListener('change',()=>{if(state.view==='measurements')render();});
-  readHash();render();
+  explorerNavigation.start();
 })();
