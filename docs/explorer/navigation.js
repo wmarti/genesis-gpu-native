@@ -5,6 +5,7 @@ function createExplorerNavigation({
 }) {
   const defaults = Object.freeze({
     view:'architecture', component:null, focus:null, symbol:null, commit:null,
+    sourceFile:null, sourceLine:null, sourceMode:'excerpt',
     tab:'details', measure:'scaling', deck:'tuned', precision:'Mixed',
     hardware:'b200', unit:'nsPerDay'
   });
@@ -14,6 +15,7 @@ function createExplorerNavigation({
     precision:['Mixed','FP64'], hardware:M.hardware.map(h=>h.id), unit:['nsPerDay','msPerStep']
   };
   const components = new Map(A.components.map(c=>[c.id,c]));
+  const files = new Map(I.files.map(file=>[file.path,file]));
   const commits = new Set(M.history.map(c=>c.sha));
   const key = s => JSON.stringify([s.path,s.line,s.name]);
   const symbols = new Map(I.symbols.map(s=>[key(s),s]));
@@ -38,17 +40,37 @@ function createExplorerNavigation({
     const candidates=known||A.components.filter(c=>c.paths.includes(symbol.path)).map(c=>c.id);
     return candidates.includes(requested)?requested:candidates[0]||null;
   }
+  function fileOwner(path, requested) {
+    const candidates=A.components.filter(c=>c.paths.includes(path)).map(c=>c.id);
+    return candidates.includes(requested)?requested:candidates[0]||null;
+  }
   function normalize(candidate={}) {
     const next={...defaults};
     for(const [field,values] of Object.entries(allowed))
       if(values.includes(candidate[field]))next[field]=candidate[field];
+    const symbol=resolveSymbol(candidate.symbol);
+    const file=candidate.sourceMode==='file'
+      ? files.get(candidate.sourceFile || symbol?.path):null;
+    if(file) {
+      next.view='architecture';
+      next.tab='code';
+      next.sourceMode='file';
+      next.sourceFile=file.path;
+      const fallback=symbol?.path===file.path?symbol.line:1;
+      const line=Number.isSafeInteger(candidate.sourceLine)&&candidate.sourceLine>0
+        ?candidate.sourceLine:fallback;
+      next.sourceLine=Math.max(1,Math.min(file.lines,line));
+    }
     if(next.view==='architecture') {
       next.component=components.has(candidate.component)?candidate.component:null;
       next.focus=next.component && candidate.focus===next.component?next.component:null;
-      next.symbol=resolveSymbol(candidate.symbol);
+      next.symbol=!file||symbol?.path===file.path?symbol:null;
       if(next.symbol) {
         next.component=ownerOf(next.symbol,next.component);
         next.focus=next.component; // Source readers always retain a parts navigator.
+      } else if(file) {
+        next.component=fileOwner(file.path,next.component);
+        next.focus=next.component;
       }
     } else if(next.view==='movement') {
       next.commit=commits.has(candidate.commit)?candidate.commit:null;
@@ -65,10 +87,17 @@ function createExplorerNavigation({
     // Support a terse curated function link as well as full source coordinates.
     const component=components.get(candidate.component);
     const curated=component?.functions.find(s=>s.id===params.get('function'));
-    const line=params.get('line')||'';
+    const fileMode=params.get('source')==='file';
+    const line=(fileMode&&params.has('symbolLine')?params.get('symbolLine'):params.get('line'))||'';
     candidate.symbol=curated||(/^[1-9]\d{0,8}$/.test(line)?resolveSymbol({
       path:params.get('file'), line:Number(line), name:params.get('symbol')
     }):null);
+    if(fileMode) {
+      candidate.sourceMode='file';
+      candidate.sourceFile=params.get('file');
+      const sourceLine=params.get('line')||'';
+      candidate.sourceLine=/^[1-9]\d*$/.test(sourceLine)?Number(sourceLine):null;
+    }
     if(candidate.symbol&&!params.has('tab'))candidate.tab='code';
     if(!params.has('view')&&commits.has(candidate.commit)&&!candidate.symbol)
       candidate.view='movement';
@@ -79,7 +108,15 @@ function createExplorerNavigation({
     if(route.view!=='architecture')params.set('view',route.view);
     if(route.component)params.set('component',route.component);
     if(route.focus)params.set('detail','steps');
-    if(route.symbol) {
+    if(route.sourceMode==='file') {
+      params.set('source','file');
+      params.set('file',route.sourceFile);
+      params.set('line',String(route.sourceLine));
+      if(route.symbol) {
+        params.set('symbol',route.symbol.name);
+        if(route.symbol.line!==route.sourceLine)params.set('symbolLine',String(route.symbol.line));
+      }
+    } else if(route.symbol) {
       params.set('file',route.symbol.path);
       params.set('line',String(route.symbol.line));
       params.set('symbol',route.symbol.name);
@@ -132,6 +169,8 @@ function createExplorerNavigation({
   function parentRoute(candidate=getState()) {
     const route=normalize(candidate);
     if(route.view==='architecture') {
+      if(route.sourceMode==='file')return {...route,sourceMode:'excerpt',sourceFile:null,
+        sourceLine:null,tab:route.symbol||!route.component?'code':'details'};
       if(route.symbol)return {...route,symbol:null,focus:route.component,
         tab:route.component?'details':'code'};
       if(route.focus)return {...route,focus:null,tab:'details'};
@@ -150,6 +189,8 @@ function createExplorerNavigation({
   }
   function backLabel() {
     const route=normalize(getState());
+    if(route.sourceMode==='file')return route.symbol?'Back to source excerpt'
+      :route.component?'Back to component parts':'Back to source index';
     if(route.symbol)return route.component?'Back to component parts':'Back to source index';
     if(route.focus)return 'Back to component on map';
     if(route.view==='movement'&&route.commit)return 'Back to all changes';
@@ -173,7 +214,7 @@ function createExplorerNavigation({
     lastURL=env.location.href;
     env.addEventListener('popstate',restore);
     env.addEventListener('hashchange',restore);
-    if(getState().symbol&&getState().tab==='code')focus(getState(),{restoring:false});
+    if((getState().symbol||getState().sourceFile)&&getState().tab==='code')focus(getState(),{restoring:false});
   }
   function dispose() {
     env.removeEventListener('popstate',restore);

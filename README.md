@@ -4,7 +4,7 @@
 
 > **See how the GPU port works.** Explore eight connected components, inspect the source, and compare published performance results. No GPU or installation needed.
 >
-> [Architecture](https://wmarti.github.io/genesis-gpu-native/) · [Performance](https://wmarti.github.io/genesis-gpu-native/#view=measurements) · [What changed](https://wmarti.github.io/genesis-gpu-native/#view=movement) · [Run locally](docs/explorer/README.md#preview-and-verify)
+> [Architecture](https://wmarti.github.io/genesis-gpu-native/) · [Full source](https://wmarti.github.io/genesis-gpu-native/#source=file&file=src%2Fspdyn%2Fgpu_step.cu&line=1) · [Performance](https://wmarti.github.io/genesis-gpu-native/#view=measurements) · [What changed](https://wmarti.github.io/genesis-gpu-native/#view=movement) · [Run locally](docs/explorer/README.md#preview-and-verify)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/wmarti/genesis-gpu-native/releases/download/gpu-resident-v1/hero-dark.png">

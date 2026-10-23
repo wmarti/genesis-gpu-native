@@ -306,3 +306,168 @@ test('file preview falls back to fragments and suppresses its own queued hashcha
   assertExactFunction(browser.state, firstFunction);
   assert.equal(browser.state.focus, component.id);
 });
+
+test('full-file links use trusted files, preserve an arbitrary line, and reveal the reader on load', () => {
+  const file = sourceIndex.files.find(f => f.path === firstFunction.path);
+  assert.ok(file);
+  const line = Math.min(firstFunction.line + 7, file.lines);
+  const hash = '#' + new URLSearchParams({source: 'file', file: file.path, line: String(line)});
+  const browser = browserHarness({hash, precedingEntry: true});
+  const initialEntries = JSON.parse(JSON.stringify(browser.entries));
+  browser.start();
+  assert.equal(browser.state.view, 'architecture');
+  assert.equal(browser.state.tab, 'code');
+  assert.equal(browser.state.sourceMode, 'file');
+  assert.equal(browser.state.sourceFile, file.path);
+  assert.equal(browser.state.sourceLine, line);
+  assert.equal(browser.state.symbol, null, 'A file location must not invent a selected definition');
+  assert.equal(browser.state.component, component.id);
+  assert.equal(browser.state.focus, component.id);
+  assert.equal(browser.focusEvents.length, 1);
+  assert.deepEqual(browser.entries, initialEntries, 'Opening a shared file link preserves browser history');
+  assert.deepEqual(browser.navigation.decode(browser.navigation.encode(browser.state)), browser.state);
+
+  const noDefinitions = sourceIndex.files.find(f => f.symbols === 0);
+  assert.ok(noDefinitions, 'The real catalog contains source files without indexed definitions');
+  const header = browser.navigation.decode('#' + new URLSearchParams({
+    source: 'file', file: noDefinitions.path, line: '1', view: 'measurements', tab: 'evidence'
+  }));
+  assert.equal(header.sourceFile, noDefinitions.path);
+  assert.equal(header.sourceMode, 'file');
+  assert.equal(header.view, 'architecture');
+  assert.equal(header.tab, 'code');
+});
+
+test('full-file routes reject unindexed paths and keep line locations within the actual file', () => {
+  const browser = browserHarness();
+  browser.start();
+  const file = sourceIndex.files.find(f => f.path === firstFunction.path);
+  for (const path of ['../../etc/passwd', '/etc/passwd', 'javascript:alert(1)',
+    'https://other.test/source', file.path + '/../../README.md']) {
+    const route = browser.navigation.decode('#' + new URLSearchParams({
+      source: 'file', file: path, line: '10'
+    }));
+    assert.equal(route.sourceMode, 'excerpt', path);
+    assert.equal(route.sourceFile, null, path);
+    assert.equal(route.sourceLine, null, path);
+  }
+  for (const invalid of ['', '0', '-1', '1.5', 'NaN', 'Infinity', '1e2', '99999999999999999']) {
+    const route = browser.navigation.decode('#' + new URLSearchParams({
+      source: 'file', file: file.path, line: invalid
+    }));
+    assert.equal(route.sourceLine, 1, `Invalid line ${invalid} defaults to the first line`);
+  }
+  const beyondEnd = browser.navigation.decode('#' + new URLSearchParams({
+    source: 'file', file: file.path, line: String(file.lines + 123)
+  }));
+  assert.equal(beyondEnd.sourceLine, file.lines);
+  const excerpt = browser.navigation.normalize({
+    ...symbolRoute(), sourceMode: 'excerpt', sourceFile: file.path, sourceLine: 25
+  });
+  assert.equal(excerpt.sourceFile, null);
+  assert.equal(excerpt.sourceLine, null);
+});
+
+test('sharing a full file preserves exact symbol identity separately from the line being read', () => {
+  const browser = browserHarness();
+  browser.start();
+  const file = sourceIndex.files.find(f => f.path === firstFunction.path);
+  const line = Math.min(firstFunction.line + 7, file.lines);
+  assert.notEqual(line, firstFunction.line, 'Exercise a location beyond the definition header');
+  browser.navigation.navigate({...symbolRoute(), sourceMode: 'file', sourceLine: line});
+  assert.equal(browser.state.sourceFile, file.path, 'The symbol supplies its trusted file');
+  assertExactFunction(browser.state, firstFunction);
+  const hash = browser.navigation.encode(browser.state);
+  const params = new URLSearchParams(hash.slice(1));
+  assert.equal(params.get('source'), 'file');
+  assert.equal(params.get('file'), file.path);
+  assert.equal(params.get('line'), String(line));
+  assert.equal(params.get('symbolLine'), String(firstFunction.line));
+  const recipient = browserHarness({hash});
+  recipient.start();
+  assert.deepEqual(recipient.state, browser.state);
+  assertExactFunction(recipient.state, firstFunction);
+
+  const atDefinition = browser.navigation.normalize({...browser.state, sourceLine: firstFunction.line});
+  const declarationHash = browser.navigation.encode(atDefinition);
+  assert.equal(new URLSearchParams(declarationHash.slice(1)).has('symbolLine'), false);
+  assert.deepEqual(browser.navigation.decode(declarationHash), atDefinition);
+});
+
+test('in-app Back exits full file to excerpt, parts, or source index according to context', () => {
+  const browser = browserHarness();
+  browser.start();
+  browser.navigation.navigate({...symbolRoute(), sourceMode: 'file'});
+  assert.equal(browser.navigation.backLabel(), 'Back to source excerpt');
+  browser.navigation.goUp();
+  assertExactFunction(browser.state, firstFunction);
+  assert.equal(browser.state.sourceMode, 'excerpt');
+  assert.equal(browser.state.sourceFile, null);
+  assert.equal(browser.state.sourceLine, null);
+  assert.equal(browser.state.tab, 'code');
+  browser.navigation.goUp();
+  assert.equal(browser.state.symbol, null);
+  assert.equal(browser.state.focus, component.id);
+  assert.equal(browser.state.tab, 'details');
+
+  browser.navigation.navigate({sourceMode: 'file', sourceFile: firstFunction.path, sourceLine: 1});
+  assert.equal(browser.navigation.backLabel(), 'Back to component parts');
+  browser.navigation.goUp();
+  assert.equal(browser.state.focus, component.id);
+  assert.equal(browser.state.tab, 'details');
+  assert.equal(browser.state.sourceFile, null);
+
+  browser.navigation.navigate({sourceMode: 'file', sourceFile: unownedSymbol.path, sourceLine: 1});
+  assert.equal(browser.state.component, null, 'A previous component cannot claim an unrelated file');
+  assert.equal(browser.state.focus, null);
+  assert.equal(browser.navigation.backLabel(), 'Back to source index');
+  browser.navigation.goUp();
+  assert.equal(browser.state.sourceMode, 'excerpt');
+  assert.equal(browser.state.symbol, null);
+  assert.equal(browser.state.tab, 'code');
+});
+
+test('full-file browser history restores line and symbol, and explicit exits clear file state', () => {
+  const browser = browserHarness();
+  browser.start();
+  browser.navigation.navigate(symbolRoute());
+  browser.navigation.navigate({sourceMode: 'file', sourceLine: firstFunction.line + 1});
+  const firstFileState = {...browser.state};
+  browser.navigation.navigate({sourceLine: firstFunction.line + 2});
+  const length = browser.entries.length;
+  browser.navigation.navigate({sourceLine: firstFunction.line + 2});
+  assert.equal(browser.entries.length, length, 'Sharing or repeating the same file location is a route no-op');
+  browser.back();
+  assert.deepEqual(browser.state, firstFileState);
+  browser.back();
+  assert.equal(browser.state.sourceMode, 'excerpt');
+  assert.equal(browser.state.sourceFile, null);
+  assertExactFunction(browser.state, firstFunction);
+  browser.forward();
+  assert.deepEqual(browser.state, firstFileState);
+  const renders = browser.renders;
+  browser.duplicateEvents();
+  assert.equal(browser.renders, renders);
+  browser.navigation.navigate({view: 'measurements', component: null, focus: null, symbol: null,
+    sourceMode: 'excerpt', sourceFile: null, sourceLine: null, tab: 'details'});
+  assert.equal(browser.state.view, 'measurements');
+  assert.equal(browser.state.sourceFile, null);
+  assert.equal(browser.state.sourceLine, null);
+});
+
+test('full-file routes work in file previews and do not retain a symbol from a different file', () => {
+  const browser = browserHarness({file: true});
+  browser.start();
+  browser.navigation.navigate({...symbolRoute(), sourceMode: 'file'});
+  assert.equal(browser.historyAttempts.at(-1).method, 'pushState');
+  const renders = browser.renders;
+  browser.flush();
+  assert.equal(browser.renders, renders);
+  browser.navigation.navigate({sourceFile: unownedSymbol.path, sourceLine: unownedSymbol.line});
+  assert.equal(browser.state.sourceFile, unownedSymbol.path);
+  assert.equal(browser.state.symbol, null);
+  assert.equal(browser.state.component, null);
+  browser.back();
+  assert.equal(browser.state.sourceFile, firstFunction.path);
+  assertExactFunction(browser.state, firstFunction);
+});

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from functools import lru_cache
+import hashlib
 from html.parser import HTMLParser
 import json
 import re
@@ -13,6 +14,7 @@ import subprocess
 from urllib.parse import unquote, urlsplit
 
 from build_explorer_index import ROOT, OUTPUT, build_index, read_index
+from build_explorer_sources import check_sources, parse_source, read_manifest
 
 
 REPOSITORY = "https://github.com/wmarti/genesis-gpu-native"
@@ -265,6 +267,59 @@ def verify_history(data, sha, errors):
     return len(history)
 
 
+def verify_source_bundle(index, errors):
+    """Validate complete lazy source files as data against the pinned Git blobs."""
+    site = ROOT / "docs/explorer"
+    directory = site / "source-files"
+    manifest_path = site / "source-manifest.js"
+    if directory.is_symlink() or manifest_path.is_symlink():
+        raise ValueError("Source bundle directories and manifest must not be symlinks")
+    manifest = read_manifest()
+    if manifest.get("sourceCommit") != index["commit"]:
+        errors.append("Full source bundle and lexical index refer to different snapshots")
+    records = {record["path"]: record for record in index["files"]}
+    files = manifest.get("files", {})
+    if set(files) != set(records):
+        errors.append("Full source bundle must cover exactly the indexed source paths")
+    total_lines = total_bytes = 0
+    expected_assets = set()
+    for path in sorted(set(files) & set(records)):
+        if not path.startswith("src/spdyn/") or path not in tree_paths(index["commit"]):
+            errors.append(f"Full source path is outside the trusted pinned source tree: {path}")
+            continue
+        metadata = files[path]
+        asset = metadata.get("asset", "")
+        expected_asset = "source-files/" + hashlib.sha256(path.encode("utf-8")).hexdigest() + ".js"
+        if asset != expected_asset:
+            errors.append(f"Source asset has an untrusted path: {path}")
+            continue
+        expected_assets.add(asset)
+        target = site / asset
+        if target.is_symlink() or not target.resolve().is_relative_to(directory.resolve()):
+            errors.append(f"Source asset must be a regular file inside source-files: {asset}")
+            continue
+        registered_path, source = parse_source(target.read_text(encoding="utf-8"))
+        raw = source.encode("utf-8")
+        pinned = subprocess.check_output(["git", "cat-file", "blob", f"{index['commit']}:{path}"], cwd=ROOT)
+        if registered_path != path or raw != pinned:
+            errors.append(f"Full source text differs from its exact pinned Git blob: {path}")
+        line_count = len(source.splitlines())
+        checksum = hashlib.sha256(raw).hexdigest()
+        if (metadata.get("bytes") != len(raw) or metadata.get("sha256") != checksum
+                or metadata.get("lineCount") != line_count or metadata.get("language") != records[path]["language"]
+                or records[path]["sha256"] != checksum or records[path]["lines"] != line_count):
+            errors.append(f"Full source bytes/hash/lines/language disagree with source metadata: {path}")
+        total_lines += line_count
+        total_bytes += len(raw)
+    actual_assets = {path.relative_to(site).as_posix() for path in directory.rglob("*") if path.is_file() or path.is_symlink()}
+    if actual_assets != expected_assets:
+        errors.append("Full source bundle contains missing or unexpected files")
+    # Enforce the exact safe JavaScript serialization as well as decoded content.
+    # No source file is executed during this check.
+    errors.extend(check_sources(index))
+    return len(files), total_lines, total_bytes
+
+
 class AssetParser(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -335,7 +390,12 @@ def main() -> None:
         errors.append("Source index exceeds the 500 KB static asset budget")
 
     asset_count = reference_count = history_count = 0
+    bundled_files = bundled_lines = bundled_bytes = 0
     if not args.index_only:
+        try:
+            bundled_files, bundled_lines, bundled_bytes = verify_source_bundle(index, errors)
+        except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+            errors.append(f"Cannot validate full source bundle: {error}")
         try:
             architecture = load_data("source-map.js")
             measurements = load_data("measurements.js")
@@ -367,7 +427,9 @@ def main() -> None:
         raise SystemExit("Explorer validation failed:\n- " + "\n- ".join(errors))
     print(f"Explorer verified: {len(source_lines)} source files, {len(seen)} symbol links, "
           f"{reference_count} source excerpts/references, {history_count} Git commits, "
-          f"{asset_count} relative HTML assets; snapshot {index['commit'][:7]}.")
+          f"{asset_count} relative HTML assets; "
+          f"{bundled_files} complete source files ({bundled_lines:,} lines, {bundled_bytes:,} bytes); "
+          f"snapshot {index['commit'][:7]}.")
 
 
 if __name__ == "__main__":

@@ -1,1 +1,4 @@
 GENESIS_VERSION filter=version-date
+docs/explorer/source-files/*.js linguist-generated=true
+docs/explorer/source-manifest.js linguist-generated=true
+docs/explorer/source-index.js linguist-generated=true

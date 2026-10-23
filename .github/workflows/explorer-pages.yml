@@ -32,10 +32,20 @@ jobs:
           fetch-depth: 0
       - name: Check JavaScript syntax
         run: |
-          for file in docs/explorer/*.js; do node --check "$file"; done
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const vm = require('node:vm');
+          for (const directory of ['docs/explorer', 'docs/explorer/source-files']) {
+            for (const file of fs.readdirSync(directory).filter(file => file.endsWith('.js'))) {
+              const filename = path.join(directory, file);
+              new vm.Script(fs.readFileSync(filename, 'utf8'), { filename });
+            }
+          }
+          NODE
       - name: Verify navigation and source deep links
         run: node --test scripts/test_explorer_navigation.js
-      - name: Verify source links, excerpts, measurements, and assets
+      - name: Verify complete source files, links, measurements, and assets
         run: python3 scripts/check_explorer.py
       - name: Upload static website
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

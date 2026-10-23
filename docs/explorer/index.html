@@ -12,6 +12,8 @@
   <script defer src="./component-guide.js"></script>
   <script defer src="./measurements.js"></script>
   <script defer src="./source-index.js"></script>
+  <script defer src="./source-manifest.js"></script>
+  <script defer src="./source-reader.js"></script>
   <script defer src="./navigation.js"></script>
   <script defer src="./app.js"></script>
 </head>
@@ -19,7 +21,7 @@
   <a class="skip-link" href="#workspace">Skip to explorer</a>
   <header class="app-header">
     <button class="brand" id="home" aria-label="GENESIS explorer home"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M7 5h7v7H7zM14 12h7v7h-7zM7 19h7v4H7z"/><path d="M10.5 12v7M17.5 5v7" fill="none" stroke="currentColor" stroke-width="2"/></svg><strong>GENESIS</strong><span>GPU native explorer</span></button>
-    <nav class="segmented main-nav" aria-label="Explorer view"><button data-view="architecture" aria-pressed="true">How it works</button><button data-view="movement" aria-pressed="false">What changed</button><button data-view="measurements" aria-pressed="false">Performance</button></nav>
+    <nav class="segmented main-nav" aria-label="Explorer view"><button data-view="architecture" aria-pressed="true">How it works</button><button data-view="movement" aria-pressed="false">What changed</button><button data-view="measurements" aria-pressed="false">Performance</button><button id="source-open" aria-pressed="false">Source</button></nav>
     <div class="header-actions"><button id="search-open" class="search-button" aria-label="Find in source" title="Find a component or function"><span class="search-icon" aria-hidden="true"></span><span>Find in source</span><kbd>⌘ K</kbd></button><button id="theme" class="icon-button" aria-label="Switch to light appearance" title="Change appearance">◐</button><button id="help-open" class="icon-button" aria-label="How to use this explorer">?</button><a class="github-link" href="https://github.com/wmarti/genesis-gpu-native" target="_blank" rel="noreferrer" aria-label="Open repository on GitHub">GitHub ↗</a></div>
   </header>
   <div class="context-bar"><div class="breadcrumbs"><button id="back" aria-label="Go back to overview" disabled>←</button><button id="overview">Map overview</button><span id="breadcrumb-detail"></span></div><div class="context-controls"><span class="status-dot"></span><span id="context-label">GPU-resident SPDYN</span><label id="neighbor-control"><input type="checkbox" id="neighbors" checked> Show connections</label><a id="revision" class="revision" target="_blank" rel="noreferrer"></a></div><button id="share-open" class="share-button" title="Share the current component, source, or results">Share <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M6 7H4v10h12V7h-2M10 12V2m-3 3 3-3 3 3"/></svg></button></div>
