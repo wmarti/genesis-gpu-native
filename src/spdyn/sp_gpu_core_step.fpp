@@ -125,13 +125,16 @@ contains
       then
       reason = 'NPT is native only with group_tp = YES and rigid_bond = YES'
     else if (npt .and. respa .and.                                         &
-             (dynamics%baro_period /= dynamics%thermo_period .or.          &
-              mod(dynamics%baro_period, nlong) /= 0)) then
+             (mod(dynamics%baro_period, dynamics%thermo_period) /= 0 .or.  &
+              mod(dynamics%thermo_period, nlong) /= 0)) then
       ! r-RESPA's MTK barostat (sp_md_respa.fpp) reads the group virial
-      ! from its thermostat tick's force and the virial of an outer step
+      ! from its thermostat tick's force and the virial of an outer step.
+      ! read_ctrl_dynamics already raises barostat_period to a multiple of
+      ! thermostat_period and requires thermostat_period to be a multiple
+      ! of elec_long_period, so this only guards that contract.
       reason = 'NPT with integrator VRES is native only when '//          &
-               'barostat_period = thermostat_period, a multiple of '//    &
-               'elec_long_period'
+               'barostat_period is a multiple of thermostat_period, '//   &
+               'itself a multiple of elec_long_period'
     else if (dynamics%annealing) then
       reason = 'simulated annealing is not qualified for the native core'
     else if (respa .and. .not. (constraints%rigid_bond .and. &

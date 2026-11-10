@@ -243,13 +243,18 @@ Supported simulations
   GPU reciprocal space) or ``CUTOFF``; **AMBER** and **GROAMBER** with
   ``electrostatic = PME`` (GROAMBER without Ryckaert-Bellemans dihedrals
   or harmonic impropers);
-* ``integrator = VVER``, and ``VRES`` (r-RESPA) for NVE and NVT with
-  ``rigid_bond = YES`` and ``group_tp = YES`` when ``eneout_period`` and
-  ``nsteps`` are multiples of ``elec_long_period``;
+* ``integrator = VVER``, and ``VRES`` (r-RESPA) for every ensemble below
+  with ``rigid_bond = YES`` and ``group_tp = YES`` when ``eneout_period``
+  and ``nsteps`` are multiples of ``elec_long_period``.  This includes the
+  multiple-time-step NPT setting of the GENESIS benchmark inputs
+  (``timestep = 0.0035``, ``elec_long_period = 2``,
+  ``thermostat_period = 6``, ``barostat_period = 6``, hydrogen mass
+  repartitioning) and a ``barostat_period`` longer than
+  ``thermostat_period`` (for example 8 and 64);
 * ``ensemble = NVE``, ``NVT`` (``tpcontrol = BERENDSEN``, ``BUSSI`` or
   ``NHC``), and ``NPT``, ``NPAT`` or ``NPgT`` with the MTK barostat
-  (``BERENDSEN``, ``BUSSI`` or ``NHC``; ``integrator = VVER``,
-  ``group_tp = YES``, ``rigid_bond = YES``);
+  (``BERENDSEN``, ``BUSSI`` or ``NHC``; ``group_tp = YES``,
+  ``rigid_bond = YES``);
 * SHAKE/RATTLE for hydrogen groups and SETTLE for rigid water;
 * hydrogen mass repartitioning (``hydrogen_mr = YES`` in [DYNAMICS], or a
   topology whose masses are already repartitioned);

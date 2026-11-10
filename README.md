@@ -206,7 +206,7 @@ peer or through CUDA-aware MPI, and nodes use MPI.
 It is opt-in (`gpu_resident = YES`, default NO). If a run is outside the supported span, all ranks fall back together to the
 existing GPU path of the same binary, and rank 0 logs the reason in one `Setup_GPU_Core>` line.
 
-Supported: CHARMM (PME or CUTOFF), AMBER and GROAMBER (PME) force fields; VVER and VRES (r-RESPA, NVE/NVT); NVE, NVT and NPT/NPAT/NPgT (MTK barostat);
+Supported: CHARMM (PME or CUTOFF), AMBER and GROAMBER (PME) force fields; VVER and VRES (r-RESPA); NVE, NVT and NPT/NPAT/NPgT (MTK barostat);
 SHAKE/RATTLE, SETTLE; positional and local bond/angle restraints; temperature REMD; one GPU per rank, one or more nodes.
 Other settings (other force fields, LJ-PME, FEP, GaMD, RPATH, TMD/SMD, TIP4P, Langevin barostat, triclinic boxes) run on the
 standard path. Details: `doc/21_GPU_Native.rst`.
