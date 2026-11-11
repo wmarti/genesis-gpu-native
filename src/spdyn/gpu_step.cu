@@ -1409,6 +1409,214 @@ __device__ __forceinline__ int shake_solve_f32(int J, double c0[3],
     return shake_end;
 }
 
+/* The precision of a fused solver pass's solve (C): float, double, or gcn_mp,
+ * FP32 arithmetic on increments around an FP64 constraint violation. */
+struct gcn_mp {};
+template <typename C> struct con_kind {
+    enum { v = sizeof(C) < sizeof(double) ? 0 : 1 };
+};
+template <> struct con_kind<gcn_mp> { enum { v = 2 }; };
+
+/* shake_solve in FP32 on increments (after Jung et al., J. Comput. Chem. 47,
+ * e70492, 2026).  shake_solve_f32 rounds the unconstrained bond e to FP32 and
+ * takes |e + d|^2 - r^2 in FP32: both lose the violation's low bits (1e-7 of
+ * r^2), so it can only stop at GCN_MIXED_CON_REL, and what is left enters the
+ * velocities through 1/dt and heats an NVE run.  Here the violation of the
+ * unconstrained bond, s0 = |e|^2 - r^2, is formed once in FP64, and each
+ * iteration adds the correction's part 2 e.d + |d|^2 in FP32, where d is the
+ * FP32 sum of the (small) corrections: every FP32 term is then small, and
+ * the bond converges at shake_tolerance or GCN_MP_CON_REL of its own scale. */
+#define GCN_MP_CON_REL 1.0e-8f
+
+template <int M>
+__device__ __forceinline__ int shake_solve_mp(int J, double c0[3],
+                                              double ch[][3], double v0[3],
+                                              double vh[][3],
+                                              const double *bx,
+                                              const double *by,
+                                              const double *bz,
+                                              const double *r,
+                                              const double *im2,
+                                              double imass1, double *sf,
+                                              int vel_update, double dt,
+                                              int iteration, double tolerance)
+{
+    float d0[3] = { 0.0f, 0.0f, 0.0f }, u0[3] = { 0.0f, 0.0f, 0.0f };
+    float b[M][3], dh[M][3], uh[M][3], e[M][3], s0[M], tol[M], im[M], g[M];
+    const float im1 = (float)imass1, rdt = (float)(1.0 / dt);
+    int ih, c, it, shake_end = 1;
+    for (ih = 0; hg_in<M>(ih, J); ++ih) {
+        double ee = 0.0;
+        b[ih][0] = (float)bx[ih]; b[ih][1] = (float)by[ih];
+        b[ih][2] = (float)bz[ih];
+        for (c = 0; c < 3; ++c) {
+            const double ed = c0[c] - ch[ih][c];
+            ee += ed * ed;
+            e[ih][c]  = (float)ed;
+            dh[ih][c] = 0.0f; uh[ih][c] = 0.0f;
+        }
+        s0[ih]  = (float)(ee - r[ih] * r[ih]);
+        tol[ih] = fmaxf((float)(2.0 * tolerance * r[ih]),
+                        (float)(2.0 * GCN_MP_CON_REL * r[ih] * r[ih]));
+        im[ih]  = im1 + (float)im2[ih];
+        g[ih]   = 0.0f;
+    }
+    for (it = 1; it <= iteration; ++it) {
+        shake_end = 1;
+        for (ih = 0; hg_in<M>(ih, J); ++ih) {
+            float d[3];
+            for (c = 0; c < 3; ++c) d[c] = d0[c] - dh[ih][c];
+            const float diff = s0[ih] +
+                2.0f * (e[ih][0]*d[0] + e[ih][1]*d[1] + e[ih][2]*d[2]) +
+                (d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
+            if (fabsf(diff) >= tol[ih]) {
+                shake_end = 0;
+                const float factor = ((e[ih][0] + d[0])*b[ih][0] +
+                                      (e[ih][1] + d[1])*b[ih][1] +
+                                      (e[ih][2] + d[2])*b[ih][2]) * im[ih];
+                const float g12 = 0.5f * diff / factor;
+                const float g1 = g12 * im1, g2 = g12 * (float)im2[ih];
+                g[ih] += g12;
+                for (c = 0; c < 3; ++c) {
+                    d0[c]     -= g1 * b[ih][c];
+                    dh[ih][c] += g2 * b[ih][c];
+                    u0[c]     -= g1 * rdt * b[ih][c];
+                    uh[ih][c] += g2 * rdt * b[ih][c];
+                }
+            }
+        }
+        if (shake_end) break;
+    }
+    for (c = 0; c < 3; ++c) {
+        c0[c] += (double)d0[c];
+        if (vel_update) v0[c] += (double)u0[c];
+    }
+    for (ih = 0; hg_in<M>(ih, J); ++ih) {
+        sf[ih] += (double)g[ih];
+        for (c = 0; c < 3; ++c) {
+            ch[ih][c] += (double)dh[ih][c];
+            if (vel_update) vh[ih][c] += (double)uh[ih][c];
+        }
+    }
+    return shake_end;
+}
+
+/* One water's three constraints by Newton iteration on its multipliers (matrix
+ * SHAKE) in FP32 on increments, as shake_solve_mp: x0r the reference and x1in
+ * the unconstrained coordinates ([axis][member]: O, H1, H2), x the constrained
+ * ones out, v corrected in place, the virial as settle_solve.  The bonds are
+ * O-H1, O-H2 and H1-H2; a correction is lam_k times the reference bond b_k
+ * over the member's mass, so it lies exactly along the reference bonds (FP32
+ * SETTLE turns the water by a rounding of 1e-6 rad about its own axes, which
+ * is what heats).  The violations of the unconstrained bonds are FP64; the
+ * Jacobian, its solve and the sums of corrections are FP32. */
+__device__ __forceinline__ void water_mshake_mp(const double x0r[3][3],
+                                                const double x1in[3][3],
+                                                double x[3][3],
+                                                double v[3][3],
+                                                int vel_update, double massO,
+                                                double massH, double rOH2,
+                                                double rHH, double inv_dt,
+                                                double acc[3])
+{
+    const float iO = (float)(1.0 / massO), iH = (float)(1.0 / massH);
+    const float cm[3][3] = { { iO + iH, iO, -iH },
+                             { iO, iO + iH, iH },
+                             { -iH, iH, iH + iH } };
+    const double d2[3] = { rOH2, rOH2, rHH * rHH };
+    const double mass[3] = { massO, massH, massH };
+    float b[3][3], p[3][3], s0[3], tol[3], lam[3] = { 0.0f, 0.0f, 0.0f };
+    float dl[3][3];
+    int k, l, c, it;
+    for (k = 0; k < 3; ++k) {
+        const int i = k == 2 ? 1 : 0, j = k == 0 ? 1 : 2;
+        double pp = 0.0;
+        for (c = 0; c < 3; ++c) {
+            const double pd = x1in[c][i] - x1in[c][j];
+            b[k][c] = (float)(x0r[c][i] - x0r[c][j]);
+            p[k][c] = (float)pd;
+            pp += pd * pd;
+        }
+        s0[k]  = (float)(pp - d2[k]);
+        tol[k] = (float)(2.0 * GCN_MP_CON_REL * d2[k]);
+    }
+    for (it = 0; it < 8; ++it) {
+        float q[3][3], sig[3], a[3][3];
+        int done = 1;
+        for (k = 0; k < 3; ++k) {
+            float pd = 0.0f, dd = 0.0f;
+            for (c = 0; c < 3; ++c) {
+                const float d = lam[0] * cm[k][0] * b[0][c] +
+                                lam[1] * cm[k][1] * b[1][c] +
+                                lam[2] * cm[k][2] * b[2][c];
+                q[k][c] = p[k][c] + d;
+                pd += p[k][c] * d;
+                dd += d * d;
+            }
+            sig[k] = s0[k] + 2.0f * pd + dd;
+            if (fabsf(sig[k]) >= tol[k]) done = 0;
+        }
+        if (done) break;
+        for (k = 0; k < 3; ++k)
+            for (l = 0; l < 3; ++l)
+                a[k][l] = 2.0f * cm[k][l] * (q[k][0] * b[l][0] +
+                                             q[k][1] * b[l][1] +
+                                             q[k][2] * b[l][2]);
+        const float m00 = a[1][1]*a[2][2] - a[1][2]*a[2][1];
+        const float m01 = a[1][0]*a[2][2] - a[1][2]*a[2][0];
+        const float m02 = a[1][0]*a[2][1] - a[1][1]*a[2][0];
+        const float rdet = 1.0f / (a[0][0]*m00 - a[0][1]*m01 + a[0][2]*m02);
+        const float r0 = -sig[0], r1 = -sig[1], r2 = -sig[2];
+        lam[0] += rdet * (r0 * m00 -
+                          a[0][1] * (r1*a[2][2] - a[1][2]*r2) +
+                          a[0][2] * (r1*a[2][1] - a[1][1]*r2));
+        lam[1] += rdet * (a[0][0] * (r1*a[2][2] - a[1][2]*r2) -
+                          r0 * m01 +
+                          a[0][2] * (a[1][0]*r2 - r1*a[2][0]));
+        lam[2] += rdet * (a[0][0] * (a[1][1]*r2 - r1*a[2][1]) -
+                          a[0][1] * (a[1][0]*r2 - r1*a[2][0]) +
+                          r0 * m02);
+    }
+    for (c = 0; c < 3; ++c) {
+        dl[c][0] = (lam[0] * b[0][c] + lam[1] * b[1][c]) * iO;
+        dl[c][1] = (lam[2] * b[2][c] - lam[0] * b[0][c]) * iH;
+        dl[c][2] = -(lam[1] * b[1][c] + lam[2] * b[2][c]) * iH;
+    }
+    for (k = 0; k < 3; ++k)
+        for (c = 0; c < 3; ++c) {
+            x[c][k] = x1in[c][k] + (double)dl[c][k];
+            acc[c] += x0r[c][k] * (double)dl[c][k] * mass[k];
+            if (vel_update) v[c][k] += (double)dl[c][k] * inv_dt;
+        }
+}
+
+/* settle_solve in C, or the water's matrix SHAKE under gcn_mp */
+template <typename C>
+__device__ __forceinline__ void settle_any(const double x0r[3][3],
+                                           const double x1in[3][3],
+                                           double x[3][3], double v[3][3],
+                                           double massO, double massH,
+                                           double mass_H2O, double ra,
+                                           double rb, double rc, double rHH,
+                                           double inv_ra, double inv_dt,
+                                           double acc[3], const C *)
+{
+    settle_solve<C>(x0r, x1in, x, v, 1, massO, massH, mass_H2O, ra, rb, rc,
+                    rHH, inv_ra, inv_dt, acc);
+}
+__device__ __forceinline__ void settle_any(const double x0r[3][3],
+                                           const double x1in[3][3],
+                                           double x[3][3], double v[3][3],
+                                           double massO, double massH,
+                                           double, double ra, double rb,
+                                           double rc, double rHH, double,
+                                           double inv_dt, double acc[3],
+                                           const gcn_mp *)
+{
+    water_mshake_mp(x0r, x1in, x, v, 1, massO, massH,
+                    (ra + rb) * (ra + rb) + rc * rc, rHH, inv_dt, acc);
+}
+
 template <int M>
 __device__ __forceinline__ int rattle_hgroup_solve_f32(int J,
                                                        const double c0[3],
@@ -1865,7 +2073,7 @@ __global__ void gcn_kern_vv1_single(S *__restrict__ v,
 
 /* Waters: kick, drift and SETTLE (gcn_kern_settle_vv1's launch shape, so
  * its partials), the solve in R. */
-template <int VIEW, typename R>
+template <int VIEW, typename R, typename C = R>
 __global__ void __launch_bounds__(GCN_RED_BLOCK)
 gcn_kern_vv1_water(gc_i64 nwater, const gc_i32 *__restrict__ wslot,
                    R *__restrict__ v, gc_f64 *__restrict__ x,
@@ -1916,8 +2124,8 @@ gcn_kern_vv1_water(gc_i64 nwater, const gc_i32 *__restrict__ wslot,
         for (int k = 0; k < 3; ++k)
             for (int c = 0; c < 3; ++c)
                 xref[(gc_i64)c * pitch + ia[k]] = xr[c][k];
-        settle_solve<R>(xr, x1, xn, vw, 1, massO, massH, mass_H2O, ra, rb,
-                        rc, rHH, inv_ra, inv_dt, acc);
+        settle_any(xr, x1, xn, vw, massO, massH, mass_H2O, ra, rb, rc, rHH,
+                   inv_ra, inv_dt, acc, (const C *)0);
         for (int k = 0; k < 3; ++k)
             for (int c = 0; c < 3; ++c) {
                 x[(gc_i64)c * pitch + ia[k]] = xn[c][k];
@@ -1938,7 +2146,7 @@ gcn_kern_vv1_water(gc_i64 nwater, const gc_i32 *__restrict__ wslot,
 /* One hydrogen group's kick, drift and SHAKE for at most M hydrogens. With M a
  * small constant the loops unroll and the per-group arrays are registers; a
  * shorter group skips the rest of each loop. */
-template <int M, int VIEW, typename R>
+template <int M, int VIEW, typename R, typename C>
 __device__ __forceinline__ void vv1_hgroup_row(
     gc_i64 g, gc_i64 ngrp, const gc_i32 *__restrict__ heavy,
     const gc_i32 *__restrict__ hslot, const gc_i32 *__restrict__ arity,
@@ -1989,7 +2197,10 @@ __device__ __forceinline__ void vv1_hgroup_row(
         bz[ih] = xg[2][0] - xg[2][ih + 1];
     }
 
-    const int shake_end = sizeof(R) < sizeof(double)
+    const int shake_end = con_kind<C>::v == 2
+        ? shake_solve_mp<M>(J, c0, ch, v0, vh, bx, by, bz, r, im2, im1[g],
+                            sf, 1, con_dt, iteration, tolerance)
+        : con_kind<C>::v == 0
         ? shake_solve_f32<M>(J, c0, ch, v0, vh, bx, by, bz, r, im2, im1[g],
                              sf, 1, con_dt, iteration, tolerance)
         : shake_solve<M>(J, c0, ch, v0, vh, bx, by, bz, r, im2, im1[g], sf,
@@ -2029,7 +2240,7 @@ __device__ __forceinline__ void vv1_hgroup_row(
 /* Hydrogen groups: kick, drift and SHAKE (gcn_kern_shake_vv1's launch
  * shape, so its partials), the solve in R; groups of up to four hydrogens
  * take the register body. */
-template <int VIEW, typename R, int WIDE>
+template <int VIEW, typename R, int WIDE, typename C = R>
 __global__ void __launch_bounds__(GCN_RED_BLOCK)
 gcn_kern_vv1_hgroup(gc_i64 ngrp, const gc_i32 *__restrict__ heavy,
                     const gc_i32 *__restrict__ hslot,
@@ -2056,7 +2267,7 @@ gcn_kern_vv1_hgroup(gc_i64 ngrp, const gc_i32 *__restrict__ heavy,
     for (gc_i64 g = (gc_i64)blockIdx.x * blockDim.x + threadIdx.x; g < ngrp;
          g += (gc_i64)gridDim.x * blockDim.x) {
 #define GCN_VV1_HGROUP(M)                                                    \
-        vv1_hgroup_row<M, VIEW, R>(g, ngrp, heavy, hslot, arity, dist, imh,   \
+        vv1_hgroup_row<M, VIEW, R, C>(g, ngrp, heavy, hslot, arity, dist, imh,   \
                                  im1, v, x, xref, f, minv, pitch, dt,       \
                                  half_dt, con_dt, iteration, tolerance,     \
                                  gid, fail, hgrp, vw, rs, acc, m, ms)
@@ -2109,7 +2320,7 @@ __global__ void gcn_kern_vv2_single(S *__restrict__ v,
 }
 
 /* Waters' VV2 half kick and water RATTLE, the solve in R */
-template <int JOIN, typename R, int TICK>
+template <int JOIN, typename R, int TICK, typename C = R>
 __global__ void gcn_kern_vv2_water(gc_i64 nwater,
                                    const gc_i32 *__restrict__ wslot,
                                    R *__restrict__ v,
@@ -2148,7 +2359,7 @@ __global__ void gcn_kern_vv2_water(gc_i64 nwater,
             force3_store<JOIN, R>(j, ia[k], pitch, fs[k]);
             for (int c = 0; c < 3; ++c) { vw[c][k] = va[c]; pre[c][k] = pa[c]; }
         }
-        rattle_water_solve<R>(xw, vw, massO, massH);
+        rattle_water_solve<C>(xw, vw, massO, massH);
         for (int k = 0; k < 3; ++k)
             for (int c = 0; c < 3; ++c)
                 v[(gc_i64)c * pitch + ia[k]] = vw[c][k];
@@ -2165,7 +2376,7 @@ __global__ void gcn_kern_vv2_water(gc_i64 nwater,
 
 /* One hydrogen group's VV2 half kick and RATTLE, its arity as in
  * vv1_hgroup_row. */
-template <int M, int JOIN, typename R, int TICK>
+template <int M, int JOIN, typename R, int TICK, typename C>
 __device__ __forceinline__ void vv2_hgroup_row(
     gc_i64 g, gc_i64 ngrp, const gc_i32 *__restrict__ heavy,
     const gc_i32 *__restrict__ hslot, const gc_i32 *__restrict__ arity,
@@ -2208,7 +2419,7 @@ __device__ __forceinline__ void vv2_hgroup_row(
         }
     }
 
-    const int rattle_end = sizeof(R) < sizeof(double)
+    const int rattle_end = sizeof(C) < sizeof(double)
         ? rattle_hgroup_solve_f32<M>(J, c0, ch, v0, vh, r, im2, im1[g],
                                      iteration, tolerance)
         : rattle_hgroup_solve<M>(J, c0, ch, v0, vh, r, im2, im1[g],
@@ -2226,7 +2437,7 @@ __device__ __forceinline__ void vv2_hgroup_row(
 }
 
 /* Hydrogen groups' VV2 half kick and RATTLE, the solve in R */
-template <int JOIN, typename R, int TICK, int WIDE>
+template <int JOIN, typename R, int TICK, int WIDE, typename C = R>
 __global__ void gcn_kern_vv2_hgroup(gc_i64 ngrp,
                                     const gc_i32 *__restrict__ heavy,
                                     const gc_i32 *__restrict__ hslot,
@@ -2253,7 +2464,7 @@ __global__ void gcn_kern_vv2_hgroup(gc_i64 ngrp,
     for (gc_i64 g = (gc_i64)blockIdx.x * blockDim.x + threadIdx.x; g < ngrp;
          g += (gc_i64)gridDim.x * blockDim.x) {
 #define GCN_VV2_HGROUP(M)                                                    \
-        vv2_hgroup_row<M, JOIN, R, TICK>(g, ngrp, heavy, hslot, arity, dist,  \
+        vv2_hgroup_row<M, JOIN, R, TICK, C>(g, ngrp, heavy, hslot, arity, dist,  \
                                  imh, im1, v, vhalf, vfull, x, f, minv,     \
                                  pitch, half_dt, full, iteration, tolerance,\
                                  gid, fail, j, ovf, tp, kin)
@@ -2268,22 +2479,47 @@ __global__ void gcn_kern_vv2_hgroup(gc_i64 ngrp,
     }
 }
 
+/* The arithmetic of the mixed mode's fused solver passes, GENESIS_GPU_MIXED_CON64:
+ * FP64 solves by bit, 1 hydrogen-group SHAKE (VV1), 2 hydrogen-group RATTLE
+ * (VV2), 4 SETTLE (VV1), 8 water RATTLE (VV2); and the FP32-on-increments
+ * position solves (gcn_mp), 16 shake_solve_mp for the hydrogen groups, 32
+ * water_mshake_mp for the waters, which take precedence over bits 1 and 4.
+ * A clear bit is the FP32 solve.
+ * The position solves in plain FP32 heat an NVE run through the 1/dt velocity
+ * correction (ApoA1, 2 fs, 200 ps: 572 kcal/mol/ns with every solve in FP32,
+ * 122 with SETTLE in FP64, 466 with SHAKE in FP64, 9 with both); the velocity
+ * solves in FP64 change nothing measurable and stay FP32.  0 is the
+ * gpu-resident-v1 behaviour, 5 the FP64 position solves, 48 the default. */
+#define GCN_MIXED_CON64_DEFAULT 48
+static inline int mixed_con64(void)
+{
+    static int mask = -1;
+    if (mask < 0) {
+        const char *e = getenv("GENESIS_GPU_MIXED_CON64");
+        mask = e && *e ? atoi(e) & 63 : GCN_MIXED_CON64_DEFAULT;
+        if (e && *e)
+            fprintf(stderr, "GENESIS_GPU_MIXED_CON64=%d\n", mask);
+    }
+    return mask;
+}
+
 /* The hydrogen-group solvers without their wide body when no group has
  * more than four hydrogens (the wide body's registers set the kernels'
  * occupancy) */
-template <int VIEW, typename R>
-static inline decltype(&gcn_kern_vv1_hgroup<VIEW, R, 1>)
+template <int VIEW, typename R, typename C = R>
+static inline decltype(&gcn_kern_vv1_hgroup<VIEW, R, 1, C>)
 vv1_hgroup_kernel(int wide)
 {
-    return wide ? gcn_kern_vv1_hgroup<VIEW, R, 1> : gcn_kern_vv1_hgroup<VIEW, R, 0>;
+    return wide ? gcn_kern_vv1_hgroup<VIEW, R, 1, C>
+                : gcn_kern_vv1_hgroup<VIEW, R, 0, C>;
 }
 
-template <int JOIN, typename R, int TICK>
-static inline decltype(&gcn_kern_vv2_hgroup<JOIN, R, TICK, 1>)
+template <int JOIN, typename R, int TICK, typename C = R>
+static inline decltype(&gcn_kern_vv2_hgroup<JOIN, R, TICK, 1, C>)
 vv2_hgroup_kernel(int wide)
 {
-    return wide ? gcn_kern_vv2_hgroup<JOIN, R, TICK, 1>
-                : gcn_kern_vv2_hgroup<JOIN, R, TICK, 0>;
+    return wide ? gcn_kern_vv2_hgroup<JOIN, R, TICK, 1, C>
+                : gcn_kern_vv2_hgroup<JOIN, R, TICK, 0, C>;
 }
 
 /* Flatten the sorted groups into the solvers' inputs: a water is its three
@@ -3819,14 +4055,21 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
             scale ? &d->thermo->scale : 0, d->mass, d->plan.group_tp };
         /* hydrogen groups first: their SHAKE iterations are the longest per-
          * thread chain */
-        /* mixed mode (vf32): the solvers run in FP32 (R = S) */
+        /* mixed mode (vf32): velocities and forces are FP32 (S); the position
+         * solves run in FP64 and the velocity solves in FP32 (mixed_con64) */
         vf_each(d->vf32, [&](auto z) {
         using S = decltype(z);
         if (hgrp) {
             gc_i64 nb = grid_of(d->num_hgroup, GCN_RED_BLOCK);
             if (kick)
-                (view ? vv1_hgroup_kernel<1, S>(d->rigid_wide)
-                      : vv1_hgroup_kernel<0, S>(d->rigid_wide))
+                (d->vf32 && (mixed_con64() & 16)
+                 ? (view ? vv1_hgroup_kernel<1, S, gcn_mp>(d->rigid_wide)
+                         : vv1_hgroup_kernel<0, S, gcn_mp>(d->rigid_wide))
+                 : mixed_con64() & 1
+                 ? (view ? vv1_hgroup_kernel<1, S, double>(d->rigid_wide)
+                         : vv1_hgroup_kernel<0, S, double>(d->rigid_wide))
+                 : (view ? vv1_hgroup_kernel<1, S>(d->rigid_wide)
+                         : vv1_hgroup_kernel<0, S>(d->rigid_wide)))
                     <<<(unsigned)nb, GCN_RED_BLOCK, 0, sh>>>(
                     d->num_hgroup, d->hgr_heavy, d->hgr_h, d->hgr_arity,
                     d->hgr_dist, d->hgr_inv_mass_h, d->hgr_inv_mass_c,
@@ -3864,7 +4107,13 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
             const double ra = h * (2.0 * mH) / mtot;
             const double rb = h - ra;
             if (kick)
-                (view ? gcn_kern_vv1_water<1, S> : gcn_kern_vv1_water<0, S>)
+                (d->vf32 && (mixed_con64() & 32)
+                 ? (view ? gcn_kern_vv1_water<1, S, gcn_mp>
+                         : gcn_kern_vv1_water<0, S, gcn_mp>)
+                 : mixed_con64() & 4
+                 ? (view ? gcn_kern_vv1_water<1, S, double>
+                         : gcn_kern_vv1_water<0, S, double>)
+                 : (view ? gcn_kern_vv1_water<1, S> : gcn_kern_vv1_water<0, S>))
                     <<<(unsigned)nbw, GCN_RED_BLOCK, 0, s>>>(
                     d->num_water, d->water_slot, d->vel.as<S>(), d->coord,
                     d->coord_ref, d->force.as<S>(), d->inv_mass, d->pitch,
@@ -3940,10 +4189,15 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
         using S = decltype(z);
         tp.off = off_h;
         if (hgrp && kick)
-            (prep ? (join ? vv2_hgroup_kernel<1, S, 1>(d->rigid_wide)
-                          : vv2_hgroup_kernel<0, S, 1>(d->rigid_wide))
-                  : (join ? vv2_hgroup_kernel<1, S, 0>(d->rigid_wide)
-                          : vv2_hgroup_kernel<0, S, 0>(d->rigid_wide)))
+            (mixed_con64() & 2
+             ? (prep ? (join ? vv2_hgroup_kernel<1, S, 1, double>(d->rigid_wide)
+                             : vv2_hgroup_kernel<0, S, 1, double>(d->rigid_wide))
+                     : (join ? vv2_hgroup_kernel<1, S, 0, double>(d->rigid_wide)
+                             : vv2_hgroup_kernel<0, S, 0, double>(d->rigid_wide)))
+             : (prep ? (join ? vv2_hgroup_kernel<1, S, 1>(d->rigid_wide)
+                             : vv2_hgroup_kernel<0, S, 1>(d->rigid_wide))
+                     : (join ? vv2_hgroup_kernel<1, S, 0>(d->rigid_wide)
+                             : vv2_hgroup_kernel<0, S, 0>(d->rigid_wide))))
                 <<<gh, GCN_BLOCK, 0, s>>>(
                 d->num_hgroup, d->hgr_heavy, d->hgr_h, d->hgr_arity,
                 d->hgr_dist, d->hgr_inv_mass_h, d->hgr_inv_mass_c,
@@ -3959,10 +4213,15 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
                 d->con.shake_tolerance, d->gid, d->con_fail);
         tp.off = off_w;
         if (water && kick)
-            (prep ? (join ? gcn_kern_vv2_water<1, S, 1>
-                          : gcn_kern_vv2_water<0, S, 1>)
-                  : (join ? gcn_kern_vv2_water<1, S, 0>
-                          : gcn_kern_vv2_water<0, S, 0>))
+            (mixed_con64() & 8
+             ? (prep ? (join ? gcn_kern_vv2_water<1, S, 1, double>
+                             : gcn_kern_vv2_water<0, S, 1, double>)
+                     : (join ? gcn_kern_vv2_water<1, S, 0, double>
+                             : gcn_kern_vv2_water<0, S, 0, double>))
+             : (prep ? (join ? gcn_kern_vv2_water<1, S, 1>
+                             : gcn_kern_vv2_water<0, S, 1>)
+                     : (join ? gcn_kern_vv2_water<1, S, 0>
+                             : gcn_kern_vv2_water<0, S, 0>)))
                 <<<gw, GCN_BLOCK, 0, sv>>>(
                 d->num_water, d->water_slot, d->vel.as<S>(), d->vel_half,
                 d->vel_full, d->coord, d->force.as<S>(), d->inv_mass,
