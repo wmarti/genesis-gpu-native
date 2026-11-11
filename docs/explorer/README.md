@@ -7,13 +7,13 @@ A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by 
 - Select a component to see its role, related components, and source files.
 - Choose **Explore parts** for a guide to what the component reads and makes available. Parts are grouped by responsibility; select one for an excerpt, then choose **Read complete file** to continue in context. Previous/Next browses the selected component's parts. The top **Source** tab opens the full-file reader directly: browse all 149 files, find text within a file, jump to a line, toggle **Wrap lines**, or download the original source text.
 - Browser Back/Forward restores views and exact source selections. **Share** copies a link to the current function, component, or performance comparison. Local previews explain that public links become available after publishing. The in-page back button goes up one level: source, parts, map, overview. **Map overview** restores the full map and its framing.
-- Use **Find in source** or **Command/Ctrl K** to search 2,338 lexical symbols from 149 SPDYN files.
+- Use **Find in source** or **Command/Ctrl K** to search 2,343 lexical symbols from 149 SPDYN files.
 - In a wide window, drag cards or the canvas; scroll or use +/− to zoom. **Fit** frames the graph and **Reset** restores its layout. Laptop layouts show larger role labels, with descriptions in the inspector. Smaller windows use readable cards. **Start with setup** gives new visitors a clear entry point.
-- **What changed** presents the nine port commits and changed files.
+- **What changed** presents the ten port commits and changed files.
 - **Performance** compares recorded scaling, stock GENESIS performance, and validation. Select the simulation, GPU model, math precision and chart measure; unavailable choices are explained. The fastest configuration is selected by step time, and relative throughput is calculated from those timings before display rounding. All numbers link to the release evidence.
 - The appearance button switches between light and dark. Only that preference is stored locally.
 
-All 149 indexed SPDYN source files are included, totaling 221,490 lines and 8,018,794 original UTF-8 bytes (about 8 MB). A file is loaded only when opened. The complete local package works offline, including the source reader; it does not request code from GitHub or use the GitHub API. On the published site, unopened files are fetched from the same static site when needed. External evidence links still require an internet connection.
+All 149 indexed SPDYN source files are included, totaling 221,752 lines and 8,031,998 original UTF-8 bytes (about 8 MB). A file is loaded only when opened. The complete local package works offline, including the source reader; it does not request code from GitHub or use the GitHub API. On the published site, unopened files are fetched from the same static site when needed. External evidence links still require an internet connection.
 
 ## Publish on GitHub Pages
 
@@ -68,12 +68,12 @@ The tests require the full repository history because they verify original commi
 
 ## Source and evidence
 
-- Source snapshot: `1f358ba98af09384c7fe3adb61a1e5b253c006bb`.
+- Source snapshot: `c8819f52125fed826a108bc1e05b7c59cb118fb0`.
 - `source-map.js` contains eight curated responsibilities, 48 source excerpts and 13 evidenced relationships. This is not a complete compiler-derived call graph or execution trace.
 - `component-guide.js` groups all 48 definitions into reading guides, with context and conditional paths. Groups do not represent an execution sequence.
 - `source-index.js` contains a lexical inventory, including interface declarations. File line counts include comments and blank lines. Symbol counts are not test coverage.
 - `source-manifest.js` pins the same snapshot and maps every indexed path to its file asset, language, line count, original byte count and SHA-256 hash. `source-files/*.js` contains the complete UTF-8 files as JSON strings in small registration wrappers. The viewer displays the strings as source text; it does not execute the Fortran, C, C++ or CUDA code. Preserve the whole directory when copying or publishing the explorer.
-- `measurements.js` transcribes published release results and history. Benchmarks were **not rerun** for this website. The native measurements identify source `29292944` and release documentation tip `218b65ff`; current source history runs through the replacement documentation commit `34f4a37` and ends at `1f358ba`, which admits multiple time step (VRES) with NPT and is newer than the release measurements. The release tip and its replacement are not sequential commits. Commits that only build this website are left out of the history.
+- `measurements.js` transcribes published release results and history. Benchmarks were **not rerun** for this website. The native measurements identify source `29292944` and release documentation tip `218b65ff`; current source history runs through the replacement documentation commit `34f4a37` continues with `1f358ba`, which admits multiple time step (VRES) with NPT, and ends at `c8819f5`, which removes the Mixed velocity Verlet energy drift; both are newer than the release measurements. The release tip and its replacement are not sequential commits. Commits that only build this website are left out of the history.
 - Kernel-specific timings are not provided because the committed evidence does not supply them.
 - The detailed benchmark table gives 53 ns/day for the tuned four-GPU RTX 3090 case; the hero image alt text rounds it differently. The explorer follows the table.
 
