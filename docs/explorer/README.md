@@ -9,7 +9,7 @@ A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by 
 - Browser Back/Forward restores views and exact source selections. **Share** copies a link to the current function, component, or performance comparison. Local previews explain that public links become available after publishing. The in-page back button goes up one level: source, parts, map, overview. **Map overview** restores the full map and its framing.
 - Use **Find in source** or **Command/Ctrl K** to search 2,338 lexical symbols from 149 SPDYN files.
 - In a wide window, drag cards or the canvas; scroll or use +/− to zoom. **Fit** frames the graph and **Reset** restores its layout. Laptop layouts show larger role labels, with descriptions in the inspector. Smaller windows use readable cards. **Start with setup** gives new visitors a clear entry point.
-- **What changed** presents the eight original port commits and changed files.
+- **What changed** presents the nine port commits and changed files.
 - **Performance** compares recorded scaling, stock GENESIS performance, and validation. Select the simulation, GPU model, math precision and chart measure; unavailable choices are explained. The fastest configuration is selected by step time, and relative throughput is calculated from those timings before display rounding. All numbers link to the release evidence.
 - The appearance button switches between light and dark. Only that preference is stored locally.
 
@@ -68,12 +68,12 @@ The tests require the full repository history because they verify original commi
 
 ## Source and evidence
 
-- Source snapshot: `34f4a37ced7b1db375beaac87b867ea7d0ac5563`.
+- Source snapshot: `1f358ba98af09384c7fe3adb61a1e5b253c006bb`.
 - `source-map.js` contains eight curated responsibilities, 48 source excerpts and 13 evidenced relationships. This is not a complete compiler-derived call graph or execution trace.
 - `component-guide.js` groups all 48 definitions into reading guides, with context and conditional paths. Groups do not represent an execution sequence.
 - `source-index.js` contains a lexical inventory, including interface declarations. File line counts include comments and blank lines. Symbol counts are not test coverage.
 - `source-manifest.js` pins the same snapshot and maps every indexed path to its file asset, language, line count, original byte count and SHA-256 hash. `source-files/*.js` contains the complete UTF-8 files as JSON strings in small registration wrappers. The viewer displays the strings as source text; it does not execute the Fortran, C, C++ or CUDA code. Preserve the whole directory when copying or publishing the explorer.
-- `measurements.js` transcribes published release results and history. Benchmarks were **not rerun** for this website. The native measurements identify source `29292944` and release documentation tip `218b65ff`; current source history ends at the replacement documentation commit `34f4a37`. These are not sequential release commits.
+- `measurements.js` transcribes published release results and history. Benchmarks were **not rerun** for this website. The native measurements identify source `29292944` and release documentation tip `218b65ff`; current source history runs through the replacement documentation commit `34f4a37` and ends at `1f358ba`, which admits multiple time step (VRES) with NPT and is newer than the release measurements. The release tip and its replacement are not sequential commits. Commits that only build this website are left out of the history.
 - Kernel-specific timings are not provided because the committed evidence does not supply them.
 - The detailed benchmark table gives 53 ns/day for the tuned four-GPU RTX 3090 case; the hero image alt text rounds it differently. The explorer follows the table.
 

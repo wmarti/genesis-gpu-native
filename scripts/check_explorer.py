@@ -242,9 +242,13 @@ def verify_measurements(data, sha, errors):
 def verify_history(data, sha, errors):
     history = data["history"]
     repository = data["repository"]
-    expected_history = git("rev-list", "--reverse", f"{repository['baseCommit']}..{sha}").splitlines()
+    # Commits that touch docs/explorer/ build this website; they are not part of the port history.
+    expected_history = [
+        commit for commit in git("rev-list", "--reverse", f"{repository['baseCommit']}..{sha}").splitlines()
+        if not any(path.startswith("docs/explorer/") for path in git("show", "--format=", "--name-only", commit).splitlines())
+    ]
     if [entry["sha"] for entry in history] != expected_history or repository["nativeCommitCount"] != len(history):
-        errors.append("History does not match the commits between the documented base and source snapshot")
+        errors.append("History does not match the port commits between the documented base and source snapshot")
     for entry in history:
         commit = entry["sha"]
         metadata = git("show", "-s", "--format=%H%n%cs%n%s", commit).splitlines()
