@@ -40,6 +40,14 @@ struct nbc_par {
        k6, k6 roff^-3, k6 roff^-6, A6} */
     int fsw;
     float fs[8];
+    /* analytic: the table's last interval.  The linear table falls from its
+       row at the cutoff to the zero row beyond it, so the pair term reaches
+       zero at the support radius and not in a step at the cutoff; for
+       cut2 <= r2 < rc2 the analytic term is that interpolation, w times the
+       cutoff row, w = cdf / r2 - tw0 (1 at the cutoff, 0 at the support).
+       tail = {grad lj12, lj6, elec, energy lj12, lj6, elec} of that row in
+       the analytic term's units.  cut2 = rc2: no tail. */
+    float cut2, tw0, tail[6];
 };
 
 inline double ew_g(double z)   /* (erf x - 2x e^-z / sqrt(pi)) / x^3, z = x^2 */

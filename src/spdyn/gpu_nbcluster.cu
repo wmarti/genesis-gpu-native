@@ -1089,7 +1089,16 @@ __device__ __forceinline__ float nbc_pair_ana(float r2, float qq, float2 lj, con
     }
     const float tz = fmaf(r2, P.tA, -1.f);
     if (E) eel = qq * fmaf(-P.beta, nbc_poly<NP>(P.pe, tz), ri);
-    return fmaf(qq, nbc_poly<NP>(P.pf, tz) - ri2 * ri, glj);
+    const float gr = fmaf(qq, nbc_poly<NP>(P.pf, tz) - ri2 * ri, glj);
+    /* beyond the cutoff: the table's last interval (nbc_par::tail) */
+    const bool tail = r2 >= P.cut2;
+    const float w = fmaxf(fmaf(P.cdf, ri2, -P.tw0), 0.f);
+    const float gt = w * fmaf(qq, P.tail[2], fmaf(lj.x, P.tail[0], -lj.y * P.tail[1]));
+    if (E && tail) {
+        evd = w * fmaf(lj.x, P.tail[3], -lj.y * P.tail[4]);
+        eel = w * qq * P.tail[5];
+    }
+    return tail ? gt : gr;
 }
 
 /* gcn_fx::add1<kForce1> of an FP32 term: the words of (double)v's add */
@@ -1263,7 +1272,7 @@ k_nbc_mixed(nbc_work *work, const int4 *__restrict__ sci,
     __shared__ union { float fi[3][64]; unsigned int nm[2 * kGroups]; } s_u;
     unsigned int *const s_nm = s_u.nm;
     __shared__ double s_red[10];
-    __shared__ float  s_par[10];
+    __shared__ float  s_par[16];
     __shared__ float  s_mv[81];
     const int t = threadIdx.x, lane = t & 31, w = t >> 5;
     const int ti = lane & 7, tjl = lane >> 3, tj = tjl + 4 * w;
@@ -1273,6 +1282,8 @@ k_nbc_mixed(nbc_work *work, const int4 *__restrict__ sci,
         s_par[4] = P.sw_d; s_par[5] = P.sw_e;
         s_par[6] = P.pf[NP > 2 ? NP - 2 : 0]; s_par[7] = P.pf[NP > 3 ? NP - 3 : 0];
         s_par[8] = P.fs[0]; s_par[9] = P.fs[4];
+        s_par[10] = P.cut2; s_par[11] = P.tw0; s_par[12] = P.cdf;
+        s_par[13] = P.tail[0]; s_par[14] = P.tail[1]; s_par[15] = P.tail[2];
     }
 for (int k = t; k < 81; k += 64) s_mv[k] = movef[k];
     const int4 sc = sci[wk.sci];
@@ -1343,6 +1354,8 @@ for (int k = t; k < 81; k += 64) s_mv[k] = movef[k];
         Q.sw_d = s_par[4]; Q.sw_e = s_par[5];
         Q.pf[NP > 2 ? NP - 2 : 0] = s_par[6]; Q.pf[NP > 3 ? NP - 3 : 0] = s_par[7];
         if (VDW == kVdwFsw) { Q.fs[0] = s_par[8]; Q.fs[4] = s_par[9]; }   /* fma(fs0, x, -fs1) */
+        Q.cut2 = s_par[10]; Q.tw0 = s_par[11]; Q.cdf = s_par[12];
+        Q.tail[0] = s_par[13]; Q.tail[1] = s_par[14]; Q.tail[2] = s_par[15];
     }
     const unsigned int fcomp = (unsigned int)(ti < 3 ? ti : 0) * (unsigned int)pitch;
     if (ng > 0) stage(0, 0);
@@ -1556,6 +1569,30 @@ gc_status nbc_create(struct gcn_device *d)
             c->ana = 1;
             c->qs = std::sqrt(coul);
             c->par.rc2 = (float)d->cutoff2;
+            c->par.cut2 = c->par.rc2;
+            /* the table's last interval, cutoff to support (nbc_par::tail):
+               its row at the cutoff is row density - 1, and the rows beyond
+               are zero.  The LJ pairs of the analytic term carry 12 c12 and
+               6 c6, its charges sqrt(coulomb).  [DIAG] GENESIS_GPU_ANA_TAIL=0
+               keeps the step at the cutoff. */
+            const double den = d->tab.density;
+            const int kc = (int)den - 1;
+            const char *e = getenv("GENESIS_GPU_ANA_TAIL");
+            if (!c->plain && den == (double)(int)den && kc >= 2 && !(e && *e == '0')) {
+                const double sc[3] = { 1.0 / 12.0, 1.0 / 6.0, 1.0 / coul };
+                bool zero = true;
+                for (int k = 0; k < kc; ++k)
+                    for (int j = 0; j < 3; ++j)
+                        if (tg[3 * (size_t)k + j] != 0.0 || te[3 * (size_t)k + j] != 0.0) zero = false;
+                if (zero) {
+                    for (int j = 0; j < 3; ++j) {
+                        c->par.tail[j] = (float)(tg[3 * (size_t)kc + j] * sc[j]);
+                        c->par.tail[3 + j] = (float)(te[3 * (size_t)kc + j] * sc[j]);
+                    }
+                    c->par.tw0 = (float)(den - 1.0);
+                    c->par.rc2 = (float)(d->cutoff2 * den / (den - 1.0));
+                }
+            }
         } else if (d->tab.ewald_evaluation == GC_EWALD_ANALYTIC) {
             std::fprintf(stderr, "GPU_Core_Error> ewald_evaluation = ANALYTIC needs PME with "
                          "CHARMM's potential or force switch, or plain LJ; this run's table is not that form\n");
