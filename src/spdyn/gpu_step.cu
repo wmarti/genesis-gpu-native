@@ -1487,6 +1487,10 @@ __device__ __forceinline__ int shake_solve_mp(int J, double c0[3],
         }
         if (shake_end) break;
     }
+    /* not converged: the FP32 sums cannot resolve this group's correction (a
+     * large one leaves the rounding of 2 e.d above the tolerance); nothing
+     * is written and the caller solves the group in FP64 from the same input */
+    if (!shake_end) return 0;
     for (c = 0; c < 3; ++c) {
         c0[c] += (double)d0[c];
         if (vel_update) v0[c] += (double)u0[c];
@@ -1510,7 +1514,7 @@ __device__ __forceinline__ int shake_solve_mp(int J, double c0[3],
  * SETTLE turns the water by a rounding of 1e-6 rad about its own axes, which
  * is what heats).  The violations of the unconstrained bonds are FP64; the
  * Jacobian, its solve and the sums of corrections are FP32. */
-__device__ __forceinline__ void water_mshake_mp(const double x0r[3][3],
+__device__ __forceinline__ int water_mshake_mp(const double x0r[3][3],
                                                 const double x1in[3][3],
                                                 double x[3][3],
                                                 double v[3][3],
@@ -1527,7 +1531,7 @@ __device__ __forceinline__ void water_mshake_mp(const double x0r[3][3],
     const double mass[3] = { massO, massH, massH };
     float b[3][3], p[3][3], s0[3], tol[3], lam[3] = { 0.0f, 0.0f, 0.0f };
     float dl[3][3];
-    int k, l, c, it;
+    int k, l, c, it, ok = 0;
     for (k = 0; k < 3; ++k) {
         const int i = k == 2 ? 1 : 0, j = k == 0 ? 1 : 2;
         double pp = 0.0;
@@ -1540,7 +1544,7 @@ __device__ __forceinline__ void water_mshake_mp(const double x0r[3][3],
         s0[k]  = (float)(pp - d2[k]);
         tol[k] = (float)(2.0 * GCN_MP_CON_REL * d2[k]);
     }
-    for (it = 0; it < 8; ++it) {
+    for (it = 0; it <= 8; ++it) {
         float q[3][3], sig[3], a[3][3];
         int done = 1;
         for (k = 0; k < 3; ++k) {
@@ -1556,7 +1560,8 @@ __device__ __forceinline__ void water_mshake_mp(const double x0r[3][3],
             sig[k] = s0[k] + 2.0f * pd + dd;
             if (fabsf(sig[k]) >= tol[k]) done = 0;
         }
-        if (done) break;
+        if (done) { ok = 1; break; }
+        if (it == 8) break;
         for (k = 0; k < 3; ++k)
             for (l = 0; l < 3; ++l)
                 a[k][l] = 2.0f * cm[k][l] * (q[k][0] * b[l][0] +
@@ -1577,6 +1582,9 @@ __device__ __forceinline__ void water_mshake_mp(const double x0r[3][3],
                           a[0][1] * (a[1][0]*r2 - r1*a[2][0]) +
                           r0 * m02);
     }
+    /* not converged after 8 Newton steps: nothing is written and the caller
+     * solves the water with FP64 SETTLE */
+    if (!ok) return 0;
     for (c = 0; c < 3; ++c) {
         dl[c][0] = (lam[0] * b[0][c] + lam[1] * b[1][c]) * iO;
         dl[c][1] = (lam[2] * b[2][c] - lam[0] * b[0][c]) * iH;
@@ -1588,6 +1596,7 @@ __device__ __forceinline__ void water_mshake_mp(const double x0r[3][3],
             acc[c] += x0r[c][k] * (double)dl[c][k] * mass[k];
             if (vel_update) v[c][k] += (double)dl[c][k] * inv_dt;
         }
+    return 1;
 }
 
 /* settle_solve in C, or the water's matrix SHAKE under gcn_mp */
@@ -1608,13 +1617,15 @@ __device__ __forceinline__ void settle_any(const double x0r[3][3],
                                            const double x1in[3][3],
                                            double x[3][3], double v[3][3],
                                            double massO, double massH,
-                                           double, double ra, double rb,
-                                           double rc, double rHH, double,
-                                           double inv_dt, double acc[3],
-                                           const gcn_mp *)
+                                           double mass_H2O, double ra,
+                                           double rb, double rc, double rHH,
+                                           double inv_ra, double inv_dt,
+                                           double acc[3], const gcn_mp *)
 {
-    water_mshake_mp(x0r, x1in, x, v, 1, massO, massH,
-                    (ra + rb) * (ra + rb) + rc * rc, rHH, inv_dt, acc);
+    if (!water_mshake_mp(x0r, x1in, x, v, 1, massO, massH,
+                         (ra + rb) * (ra + rb) + rc * rc, rHH, inv_dt, acc))
+        settle_solve<double>(x0r, x1in, x, v, 1, massO, massH, mass_H2O, ra,
+                             rb, rc, rHH, inv_ra, inv_dt, acc);
 }
 
 template <int M>
@@ -2197,7 +2208,7 @@ __device__ __forceinline__ void vv1_hgroup_row(
         bz[ih] = xg[2][0] - xg[2][ih + 1];
     }
 
-    const int shake_end = con_kind<C>::v == 2
+    int shake_end = con_kind<C>::v == 2
         ? shake_solve_mp<M>(J, c0, ch, v0, vh, bx, by, bz, r, im2, im1[g],
                             sf, 1, con_dt, iteration, tolerance)
         : con_kind<C>::v == 0
@@ -2205,6 +2216,11 @@ __device__ __forceinline__ void vv1_hgroup_row(
                              sf, 1, con_dt, iteration, tolerance)
         : shake_solve<M>(J, c0, ch, v0, vh, bx, by, bz, r, im2, im1[g], sf,
                          1, con_dt, iteration, tolerance);
+    /* a group shake_solve_mp left untouched is solved in FP64 */
+    if (con_kind<C>::v == 2 && !shake_end)
+        shake_end = shake_solve<M>(J, c0, ch, v0, vh, bx, by, bz, r, im2,
+                                   im1[g], sf, 1, con_dt, iteration,
+                                   tolerance);
 
     for (c = 0; c < 3; ++c) {
         x[(gc_i64)c*pitch + a[0]] = c0[c];
