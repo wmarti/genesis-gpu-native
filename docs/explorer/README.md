@@ -9,11 +9,11 @@ A static, dependency-free explorer for `wmarti/genesis-gpu-native`, inspired by 
 - Browser Back/Forward restores views and exact source selections. **Share** copies a link to the current function, component, or performance comparison. Local previews explain that public links become available after publishing. The in-page back button goes up one level: source, parts, map, overview. **Map overview** restores the full map and its framing.
 - Use **Find in source** or **Command/Ctrl K** to search 2,352 lexical symbols from 149 SPDYN files.
 - In a wide window, drag cards or the canvas; scroll or use +/− to zoom. **Fit** frames the graph and **Reset** restores its layout. Laptop layouts show larger role labels, with descriptions in the inspector. Smaller windows use readable cards. **Start with setup** gives new visitors a clear entry point.
-- **What changed** presents the twelve port commits and changed files.
+- **What changed** presents the fourteen port commits and changed files.
 - **Performance** compares recorded scaling, stock GENESIS performance, and validation. Select the simulation, GPU model, math precision and chart measure; unavailable choices are explained. The fastest configuration is selected by step time, and relative throughput is calculated from those timings before display rounding. All numbers link to the release evidence.
 - The appearance button switches between light and dark. Only that preference is stored locally.
 
-All 149 indexed SPDYN source files are included, totaling 222,114 lines and 8,049,604 original UTF-8 bytes (about 8 MB). A file is loaded only when opened. The complete local package works offline, including the source reader; it does not request code from GitHub or use the GitHub API. On the published site, unopened files are fetched from the same static site when needed. External evidence links still require an internet connection.
+All 149 indexed SPDYN source files are included, totaling 222,159 lines and 8,052,209 original UTF-8 bytes (about 8 MB). A file is loaded only when opened. The complete local package works offline, including the source reader; it does not request code from GitHub or use the GitHub API. On the published site, unopened files are fetched from the same static site when needed. External evidence links still require an internet connection.
 
 ## Publish on GitHub Pages
 
@@ -68,7 +68,7 @@ The tests require the full repository history because they verify original commi
 
 ## Source and evidence
 
-- Source snapshot: `3d404bff04b7669d6fe4ef3cad54976379c47ed0`.
+- Source snapshot: `b2fc6c291ba43b3b1e63ad9947e6eaae530c75bb`.
 - `source-map.js` contains eight curated responsibilities, 48 source excerpts and 13 evidenced relationships. This is not a complete compiler-derived call graph or execution trace.
 - `component-guide.js` groups all 48 definitions into reading guides, with context and conditional paths. Groups do not represent an execution sequence.
 - `source-index.js` contains a lexical inventory, including interface declarations. File line counts include comments and blank lines. Symbol counts are not test coverage.
