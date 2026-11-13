@@ -224,6 +224,19 @@ not stdout from the B200 timing run. At 1 and 2 ranks, 48/56 and 46/56
 Mixed cases completed with zero failed comparisons; the remaining cases
 declined the native core and stopped.
 
+Where a test has a fine-table reference, a Mixed run is graded term by
+term, at the same tolerance: van der Waals energy against the fine-table
+reference (closed-form Lennard-Jones has no interpolation error), every
+other term against the default-table reference (electrostatics follows the
+run's own table over its last interval beyond the cutoff, which the fine
+table lacks). ``nano_material/VVER_NPT_BUSSI1`` (automatic ``pme_alpha``,
+``erfc(alpha*rc) = 1.2e-4``) shows why: its two references differ by 0.90
+kcal/mol in van der Waals and 34.2 in electrostatic energy, FP64 native
+equals the default-table reference exactly, and Mixed is within 0.23
+(1.7e-5) of the fine table in van der Waals and 1.9 (1.8e-6) of the default
+table in electrostatics. See ``tests/regression_test/README_ref_fine``.
+The counts are unchanged: 48/56 and 46/56 completed, none failed.
+
 To check your own GPU build with the included native regression cases::
 
   cd tests/regression_test
@@ -370,7 +383,15 @@ Keywords
   *TABLE* reads GENESIS's lookup table (``table_density``) as single
   precision records.  *ANALYTIC* evaluates the closed form with a
   polynomial erfc; it has no interpolation error, and the core checks
-  that it reproduces the table's function.  An explicit *ANALYTIC* on
+  that it reproduces the table's function.  Beyond the cutoff it follows
+  the table's last interval (cutoff to cutoff*sqrt(density/(density-1)),
+  12 to 12.31 A at the default ``table_density``), so the pair term
+  reaches zero there as in the DOUBLE mode and in standard GENESIS and
+  not in a step at the cutoff.  The step heated NVE runs whose
+  ``pme_alpha`` comes from ``pme_alpha_tol`` (UUN, 2 fs: 24.6 kcal/mol/ns
+  with the step, -0.1 without).  The environment variable
+  ``GENESIS_GPU_ANA_TAIL=0`` restores the step, for comparison only.  An
+  explicit *ANALYTIC* on
   another form stops the run, and so does *ANALYTIC* with
   ``nonbond_precision = DOUBLE``.  The 1-4 terms read the table in every
   mode.

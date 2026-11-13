@@ -36,8 +36,11 @@ def getdirs(path):
     return test_dirs
 
 # nonbond_precision = MIXED with the analytic pair term (any ewald_evaluation
-# but TABLE) has no table interpolation error, so it is graded against
-# ref_fine where a test has one (see README_ref_fine)
+# but TABLE): where a test has a ref_fine, VDWAALS is graded against ref_fine
+# (closed-form Lennard-Jones has no table interpolation error) and every other
+# term against ref (electrostatics follows the run's own table over its last
+# interval beyond the cutoff, which ref has and ref_fine lacks); see
+# README_ref_fine
 def is_mixed_analytic(output):
     mixed = False
     table = False
@@ -268,8 +271,8 @@ if (is_atdyn or is_spdyn) and (not is_parallelio):
         test.read(testname)
 
         refname = "ref"
-        if is_spdyn and is_mixed_analytic(testname) and os.path.exists("ref_fine"):
-            refname = "ref_fine"
+        vdw_from_fine = (is_spdyn and is_mixed_analytic(testname)
+                         and os.path.exists("ref_fine"))
         tolerance_cur = tolerance
         if test.is_single and is_spdyn:
             tolerance_cur = tolerance_single
@@ -296,6 +299,12 @@ if (is_atdyn or is_spdyn) and (not is_parallelio):
 
         ref = Genesis()
         ref.read(refname)
+        if vdw_from_fine:
+            ref_fine = Genesis()
+            ref_fine.read("ref_fine")
+            ref.dict_data["VDWAALS"] = ref_fine.dict_data["VDWAALS"]
+            ref.dict_text["VDWAALS"] = ref_fine.dict_text["VDWAALS"]
+            refname = "ref (VDWAALS from ref_fine)"
         
         # check the result
         print()

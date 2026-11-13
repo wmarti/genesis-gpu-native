@@ -23,11 +23,20 @@ At that density the interpolation error is about 1e-4 of the default's, so
 ref_fine carries the model, not the table.  Nothing else in the input
 changes.
 
-test.py grades a run against ref_fine when the run's output shows
-nonbond_precision = MIXED and not ewald_evaluation = TABLE, and the test
-has a ref_fine file.  Every other run, and every test without ref_fine, is
-graded against ref as before.  The tolerances are unchanged (MIXED runs
-report precision = mixed and use tolerance_single).
+For a run whose output shows nonbond_precision = MIXED and not
+ewald_evaluation = TABLE, in a test that has a ref_fine file, test.py
+grades each term against the reference that computes it the same way:
+
+  VDWAALS           against ref_fine.  Closed-form Lennard-Jones is the
+                    fine-table limit; its table rows are zero at the cutoff.
+  every other term  against ref.  Electrostatics is closed-form inside the
+                    cutoff and follows the run's own table over its last
+                    interval beyond the cutoff (see below), which ref
+                    contains and ref_fine does not.
+
+Every other run, and every test without ref_fine, is graded against ref as
+before.  The tolerances are unchanged (MIXED runs report precision = mixed
+and use tolerance_single).
 
 The 1-4 terms read the default-density table in every mode, so a MIXED
 run keeps their interpolation error (up to 1.2e-5 in VDWAALS on these
@@ -37,3 +46,17 @@ ref_fine files exist only for the tests whose MIXED run departs from ref
 by more than tolerance_single: the dppc PME tests (PME_*, VVER_*, VRES_*),
 jac_param27/PME_FSW, nano_material/VVER_NPT_BUSSI1 and pops/PME.  Every
 other test is graded against ref.
+
+The last interval.  The linear table carries the pair term from its value
+at the cutoff to zero over its last interval (cutoff to
+cutoff*sqrt(density/(density-1)), 12 to 12.31 A at the default density),
+and the analytic term evaluates that interval the same way, so that the
+energy has no step at the cutoff.  A density-2000 table has almost no such
+interval, so ref_fine lacks that contribution.  It is negligible where
+pme_alpha is 0.34.  nano_material/VVER_NPT_BUSSI1 sets pme_alpha from
+pme_alpha_tol (0.2266, erfc(alpha*rc) = 1.2e-4); there ref and ref_fine
+differ by 34.2 kcal/mol in ELECT and by 0.90 in VDWAALS, the
+double-precision native run equals ref in every digit, and the MIXED run is
+within 0.23 kcal/mol (1.7e-5) of ref_fine in VDWAALS and within 1.9
+(1.8e-6) of ref in ELECT.  Against ref alone its VDWAALS is off by 7.7e-5,
+against ref_fine alone its ELECT by 3.4e-5.

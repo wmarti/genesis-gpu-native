@@ -233,7 +233,7 @@ Keywords (all SPDYN, GPU build):
 | `gpu_route_coord` | DYNAMICS | MPI / THREAD | MPI | inter-node transport of the coordinate halo |
 | `gpu_route_force` | DYNAMICS | MPI / THREAD | MPI | inter-node transport of the force halo |
 | `nonbond_precision` | ENERGY | DOUBLE / MIXED | DOUBLE | arithmetic of the PME non-bonded terms; MIXED needs `gpu_resident = YES` and PME |
-| `ewald_evaluation` | ENERGY | TABLE / ANALYTIC | ANALYTIC where the closed form applies, else TABLE | MIXED only: lookup table or closed form with a polynomial erfc |
+| `ewald_evaluation` | ENERGY | TABLE / ANALYTIC | ANALYTIC where the closed form applies, else TABLE | MIXED only: lookup table or closed form with a polynomial erfc; beyond the cutoff the closed form follows the table's last interval (`GENESIS_GPU_ANA_TAIL=0` restores the step at the cutoff, for comparison only) |
 | `pme_grid` | ENERGY | INPUT / ACCURACY | INPUT | use the given mesh, or the smallest mesh/alpha that keeps the input's estimated force error |
 | `domain_select` | BOUNDARY | STOCK / HALO | HALO (GPU build), STOCK otherwise | domain grid rule when `domain_x/y/z` are 0 |
 
@@ -378,7 +378,9 @@ All of the following ran on the final source (29292944; the tip 218b65ff differs
   the reference is now this series (the device code is unchanged).
 - **Mixed against upstream tolerance**: Mixed runs are graded against FP64 fine-table references (`table_density`
   2000) with upstream's `tolerance_single` = 3.0e-5 (relative). In the suite's per-term comparison the largest deviations
-  were 1.2e-5 (van der Waals term) and 1.8e-6 (total energy).
+  were 1.2e-5 (van der Waals term) and 1.8e-6 (total energy). Since the analytic term follows the table's last interval
+  beyond the cutoff, only the van der Waals term is graded against the fine table; every other term is graded against the
+  default-table reference, which contains that interval (`tests/regression_test/README_ref_fine`).
 - T-REMD (4 replicas, 5000 steps) and NPT STMV (12000 steps, 1 and 4 ranks) ran on the previous tip: T-REMD output is bitwise
   identical to the earlier build; NPT means agree within spread. Not rerun on the final tip.
 - Not run: the suite at 4 ranks; `compute-sanitizer` on the final tip; multi-node correctness beyond one 2-node timing run
