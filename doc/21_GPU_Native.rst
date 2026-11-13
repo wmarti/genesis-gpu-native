@@ -287,6 +287,15 @@ REMD, triclinic boxes) are not supported by the native core and run on the
 standard path.  The native core requires a double-precision build
 (``--enable-double``, the default).
 
+One domain (one MPI process) holds at most 32,767 cells, boundary cells
+included.  The bound is standard GENESIS's: its local cell indices are 16-bit
+integers.  Setup stops with ``Setup_Cell_Boundary> too many cells in one
+domain`` instead of overflowing them (that check was added with this port),
+on the standard path as well.  The cell edge follows ``pairlistdist``, so
+the remedy is a longer ``pairlistdist`` or more MPI processes.  Example:
+STMV (1,066,628 atoms), 10 A cutoff, one process stops with ``pairlistdist
+= 11.5`` and runs with 13.5.
+
 Fallback
 =======================================================================
 
@@ -304,6 +313,13 @@ path.  Settings that only the native core runs (``electrostatic = CUTOFF``,
 At the end of a native run ``GPU_Core_Summary>`` lines report the number of
 native steps, the pair-list rebuilds and the largest atomic displacement
 between rebuilds.
+
+A run whose coordinates stop being finite is stopped at the next pair-list
+rebuild with ``rebuild: the coordinates are not finite, the run is
+unstable``; the standard path fails on the same input.  One cause is
+reported at setup: with ``rigid_bond = NO`` and a GROMACS water that has
+``[ settles ]`` but no bonds, GENESIS gives the water O-H and H-H terms a
+zero force constant, and ``Setup_Enefunc_Bond> WARNING`` says so.
 
 Keywords
 =======================================================================

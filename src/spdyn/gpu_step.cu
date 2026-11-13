@@ -3384,9 +3384,13 @@ gc_status gcn::native_verdict_check(gc_context *ctx, const gc_i64 *v,
 {
     gc_status st = GC_OK;
     if (v[0]) {
-        std::fprintf(stderr, "GPU_Core_Error> phase=force_coordinates "
-                     "invalid_groups_or_atoms=%lld\n", (long long)v[0]);
-        st = GC_E_UNSUPPORTED;
+        /* As candidate_verdict: one count per non-finite coordinate
+         * component (or per malformed group). */
+        std::fprintf(stderr,
+            "GPU_Core_Error> phase=force_coordinates non_finite_coordinates=%lld: "
+            "the run is unstable (check the time step, the constraints and "
+            "that every molecule has its bonded terms)\n", (long long)v[0]);
+        st = GC_E_NONFINITE;
     } else if (v[1] || v[2]) {
         std::fprintf(stderr, "GPU_Core_Error> phase=halo_verdict rank=%d "
                      "coord_bad=%lld force_bad=%lld\n", (int)ctx->rank,

@@ -34,6 +34,7 @@ module sp_gpu_core_abi_mod
   integer(c_int32_t), parameter :: GcErrEndpoint  = 11
   integer(c_int32_t), parameter :: GcErrArity     = 12
   integer(c_int32_t), parameter :: GcErrState     = 13
+  integer(c_int32_t), parameter :: GcErrNonfinite = 14
 
   ! term kinds, in the C enumeration's order
   !

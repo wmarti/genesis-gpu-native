@@ -72,7 +72,8 @@ typedef enum gc_status {
     GC_E_OWNER       = 10,
     GC_E_ENDPOINT    = 11,
     GC_E_ARITY       = 12,
-    GC_E_STATE       = 13
+    GC_E_STATE       = 13,
+    GC_E_NONFINITE   = 14    /* coordinates not finite: the run is unstable */
 } gc_status;
 
 typedef enum gc_group_kind {

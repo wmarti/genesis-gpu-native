@@ -368,6 +368,18 @@ contains
           end if
         end do
       end do
+
+      ! water known only by its [ settles ] gets zero force constants here
+      !
+      if (enefunc%table%water_bond_calc .and. main_rank) then
+        write(MsgOut,'(A)') 'Setup_Enefunc_Bond> WARNING: rigid_bond = NO '// &
+          'and the water molecule has [ settles ] but no bonds:'
+        write(MsgOut,'(A)') '  its O-H and H-H terms get a zero force '//    &
+          'constant, so nothing holds a water molecule together'
+        write(MsgOut,'(A)') '  and dynamics will be unstable. Use '//        &
+          'rigid_bond = YES or a flexible water topology.'
+        write(MsgOut,'(A)') ' '
+      end if
     end if
     
 #ifdef HAVE_MPI_GENESIS

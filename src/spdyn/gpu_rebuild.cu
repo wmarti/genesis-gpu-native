@@ -4196,10 +4196,14 @@ static gc_status candidate_verdict(gc_context *ctx, struct gcn_device *d,
         return GC_E_MISMATCH;
     }
     if (pin[12]) {
+        /* One count per non-finite coordinate component (or per malformed
+         * group): the integration has diverged before this list build. */
         std::fprintf(stderr,
-            "GPU_Core_Error> phase=force_coordinates invalid_groups_or_atoms=%lld\n",
+            "GPU_Core_Error> phase=force_coordinates non_finite_coordinates=%lld: "
+            "the run is unstable (check the time step, the constraints and "
+            "that every molecule has its bonded terms)\n",
             (long long)pin[12]);
-        return GC_E_UNSUPPORTED;
+        return GC_E_NONFINITE;
     }
     d->force_move_valid = 1;
     if (pin[6] != 0 || pin[7] != d->num_resident) return GC_E_MISMATCH;

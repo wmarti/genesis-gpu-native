@@ -329,6 +329,7 @@ extern "C" const char *gpu_core_status_string(gc_i32 s)
       case GC_E_ENDPOINT:    return "unresolved endpoint";
       case GC_E_ARITY:       return "arity";
       case GC_E_STATE:       return "called out of order";
+      case GC_E_NONFINITE:   return "the coordinates are not finite, the run is unstable";
       default:               return "unknown";
     }
 }

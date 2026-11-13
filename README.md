@@ -414,6 +414,9 @@ All of the following ran on the final source (29292944; the tip 218b65ff differs
 - Inter-node THREAD against MPI transport: not measured cleanly (the one comparison shared the network with another run);
   default is MPI.
 - Speed against published GROMACS: slower in every matching-hardware comparison above.
+- One domain (one MPI rank) holds at most 32,767 cells including boundary cells: standard GENESIS stores local cell indices
+  in 16 bits. Setup stops with a message instead of overflowing (our check, 03908ef), on either path. Use a longer
+  `pairlistdist` or more ranks: STMV with a 10 A cutoff at 1 rank stops at `pairlistdist` 11.5 and runs at 13.5.
 - Open items, one line each:
   - host-free pair-list rebuild (bounded at about 40 us/step on B200 at 4 GPUs), not started;
   - longer Cellulose list lifetimes gain 7-12% on RTX 3090 but need a missed-pair certificate first;
