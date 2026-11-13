@@ -82,22 +82,62 @@ program spdyn
   type(s_remd)                :: remd
   type(s_rpath)               :: rpath
   integer                     :: omp_get_max_threads, i
-  integer                     :: mpi_thread_level
+  integer                     :: mpi_thread_level, mpi_thread_request
+  character(16)               :: mpi_thread_name
   real(dp)                    :: sas, eae
   type(s_alchemy)             :: alchemy
 
 #ifdef HAVE_MPI_GENESIS
 #ifdef USE_GPU
-  ! The native core's THREAD route (gpu_route_*) runs MPI from a transport
-  ! thread; it checks the level it was given and keeps the MPI routes below
-  ! MPI_THREAD_MULTIPLE.
-  call mpi_init_thread(MPI_THREAD_MULTIPLE, mpi_thread_level, ierror)
+  ! The native core's THREAD route (gpu_route_*) and its host-thread sum run
+  ! MPI from a second thread; both check the level they were given and keep
+  ! the main-thread MPI routes below MPI_THREAD_MULTIPLE.  Some transports
+  ! (UCX built without multi-threading) cannot be selected once
+  ! MPI_THREAD_MULTIPLE is requested, and the level can be requested only
+  ! once, so GENESIS_MPI_THREAD_LEVEL chooses it (default MULTIPLE).
+  mpi_thread_request = MPI_THREAD_MULTIPLE
+  mpi_thread_name    = ''
+  call get_environment_variable('GENESIS_MPI_THREAD_LEVEL', mpi_thread_name)
+  call toupper(mpi_thread_name)
+  select case (trim(mpi_thread_name))
+  case ('', 'MULTIPLE')
+    mpi_thread_request = MPI_THREAD_MULTIPLE
+  case ('SERIALIZED')
+    mpi_thread_request = MPI_THREAD_SERIALIZED
+  case ('FUNNELED')
+    mpi_thread_request = MPI_THREAD_FUNNELED
+  case ('SINGLE')
+    mpi_thread_request = MPI_THREAD_SINGLE
+  case default
+    mpi_thread_request = -1
+  end select
+  call mpi_init_thread(max(mpi_thread_request, MPI_THREAD_SINGLE), &
+                       mpi_thread_level, ierror)
 #else
   call mpi_init(ierror)
 #endif
   call mpi_comm_rank(mpi_comm_world, my_world_rank, ierror)
   call mpi_comm_size(mpi_comm_world, nproc_world,   ierror)
   main_rank = (my_world_rank == 0)
+#ifdef USE_GPU
+  if (mpi_thread_request < 0) &
+    call error_msg('Spdyn> GENESIS_MPI_THREAD_LEVEL must be MULTIPLE, '// &
+                   'SERIALIZED, FUNNELED or SINGLE')
+  if (main_rank .and. len_trim(mpi_thread_name) > 0) then
+    if (mpi_thread_level == MPI_THREAD_MULTIPLE) then
+      mpi_thread_name = 'MULTIPLE'
+    else if (mpi_thread_level == MPI_THREAD_SERIALIZED) then
+      mpi_thread_name = 'SERIALIZED'
+    else if (mpi_thread_level == MPI_THREAD_FUNNELED) then
+      mpi_thread_name = 'FUNNELED'
+    else
+      mpi_thread_name = 'SINGLE'
+    end if
+    write(MsgOut,'(A,A)') 'Spdyn> GENESIS_MPI_THREAD_LEVEL: MPI provides ', &
+                          trim(mpi_thread_name)
+    write(MsgOut,'(A)') ' '
+  end if
+#endif
 #else
   my_world_rank = 0
   nproc_world   = 1

@@ -365,6 +365,20 @@ Keywords
   results.  Exchanges within a node always use peer-to-peer copies or
   CUDA-aware MPI.
 
+  A GPU build of **SPDYN** asks MPI for MPI_THREAD_MULTIPLE at start-up,
+  which the transport thread needs.  An MPI transport that cannot provide
+  it may then be left out by the MPI library (Open MPI does not select a
+  UCX built without multi-threading) and the run falls back to a slower
+  transport or fails.  The environment variable
+  ``GENESIS_MPI_THREAD_LEVEL`` (*MULTIPLE*, *SERIALIZED*, *FUNNELED* or
+  *SINGLE*; default *MULTIPLE*) sets the requested level; it must reach
+  every rank (``mpirun -x GENESIS_MPI_THREAD_LEVEL``).  Below *MULTIPLE*
+  the *THREAD* routes are not available and the *MPI* routes are kept
+  (``Native_Xchg> transport thread: no``), and on more than one node the
+  thermostat's kinetic-energy sum is an ``MPI_Allreduce`` on the main
+  thread, which ``gpu_step_graph`` cannot replay.  The results do not
+  depend on the level.
+
 [ENERGY] section
 -----------------------------------------------------------------------
 

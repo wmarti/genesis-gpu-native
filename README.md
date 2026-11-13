@@ -237,6 +237,10 @@ Keywords (all SPDYN, GPU build):
 | `pme_grid` | ENERGY | INPUT / ACCURACY | INPUT | use the given mesh, or the smallest mesh/alpha that keeps the input's estimated force error |
 | `domain_select` | BOUNDARY | STOCK / HALO | HALO (GPU build), STOCK otherwise | domain grid rule when `domain_x/y/z` are 0 |
 
+Environment: `GENESIS_MPI_THREAD_LEVEL` (`MULTIPLE` / `SERIALIZED` / `FUNNELED` / `SINGLE`, default `MULTIPLE`) sets the MPI
+thread level a GPU build requests. Use `FUNNELED` where the MPI transport cannot provide `MULTIPLE` (Open MPI with a UCX built
+without multi-threading); the `THREAD` routes are then unavailable and the `MPI` routes are kept.
+
 Precision labels: "FP64 (full double)" is `nonbond_precision = DOUBLE` (bitwise reproducible for a given rank count).
 "Mixed (FP32, like GROMACS)" is `MIXED`: pair term, bonded, 1-4, exclusions, PME mesh and water constraints in single
 precision; pair list, accumulation (64-bit fixed point) and integration in double.
