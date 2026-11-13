@@ -385,7 +385,7 @@ __global__ void gcn_kern_migration_pack(
         if (ga>=group_capacity || aa<0 || n<=0 ||
             aa>atom_capacity-n || dest_rank[g]==self || ggid[g]<=0 ||
             (gkind[g]==GC_GROUP_SINGLE && n!=1) ||
-            (gkind[g]==GC_GROUP_WATER && n!=3) ||
+            (gkind[g]==GC_GROUP_WATER && n!=3 && n!=4) ||
             (gkind[g]==GC_GROUP_HGROUP &&
              (n<2 || n>GC_MAX_HGROUP_H+1)) ||
             gkind[g]>GC_GROUP_HGROUP) {

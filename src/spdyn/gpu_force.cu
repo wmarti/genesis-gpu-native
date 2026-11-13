@@ -2238,6 +2238,10 @@ gc_status native_force_join(gc_context *ctx, gc_i32 want_virial,
      * its doubles are folded here, with the ghosts' real-space parts (the virial reads
      * them) */
     const int words = ctx->nproc == 1 || native_dist_mixed_words(d);
+    /* TIP4P: the massless site's force goes onto its water here, on the
+     * r-RESPA lanes before the join or on the joined force after it */
+    const int msite = native_msite_mode(d);
+    const int msite_vir = msite && publish && want_virial;
     if (words && !keep) {
         vf_each(d->vf32, [&](auto z) {
             gcn_kern_join_force_fx<<<(unsigned)nb, GCN_BLOCK, 0, d->stream>>>(
@@ -2250,12 +2254,16 @@ gc_status native_force_join(gc_context *ctx, gc_i32 want_virial,
         if (words)
             force_fold(d->force_bond_fx, d->force_bond, d->pitch, 0,
                        d->pitch, d->stream);
+        if (msite > 1 && native_msite_force(ctx, msite, msite_vir) != GC_OK)
+            return GC_E_DEVICE;
         vf_each(d->vf32, [&](auto z) {
             gcn_kern_join_force<<<(unsigned)nb, GCN_BLOCK, 0, d->stream>>>(
                 d->force.as<decltype(z)>(), d->force_real, d->force_bond,
                 d->force_recip, n3);
         });
     }
+    if (msite == 1 && native_msite_force(ctx, msite, msite_vir) != GC_OK)
+        return GC_E_DEVICE;
     if (!publish) return dev_launched("force_join");
 
     /* every resident slot's own real-space force: the halo return adds a ghost's total into
@@ -2324,6 +2332,16 @@ gc_status native_force_join(gc_context *ctx, gc_i32 want_virial,
         out->virial_ext[k] = be[GCN_BE_PVIRX + k];
     for (int k = 0; k < 3; ++k)
         out->virial_nb[k] = re[GCN_RE_VIRX + k] + cfv[k] + pe[GCN_PE_VIRX + k];
+    if (msite_vir) {
+        /* water_force_redistribution's change of the diagonal, read after
+         * this function's synchronisations */
+        gc_f64 dv[3];
+        native_msite_virial(d, dv);
+        for (int k = 0; k < 3; ++k) {
+            out->virial[k]    += dv[k];
+            out->virial_nb[k] += dv[k];
+        }
+    }
     for (int k = 0; k < GCN_BE_NSLOT; ++k)
         exact_pack(bew[2 * k], bew[2 * k + 1], out->bonded_exact + 3 * k);
 

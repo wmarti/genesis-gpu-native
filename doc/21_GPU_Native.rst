@@ -256,6 +256,11 @@ Supported simulations
   (``BERENDSEN``, ``BUSSI`` or ``NHC``; ``group_tp = YES``,
   ``rigid_bond = YES``);
 * SHAKE/RATTLE for hydrogen groups and SETTLE for rigid water;
+* 4-site rigid water (``water_model`` naming a TIP4P-type residue, with
+  ``rigid_bond = YES`` and ``fast_water = YES``): the massless site is
+  placed on the device after every water solve and its force is moved onto
+  the oxygen and hydrogens, with the virial term, before the kick; both in
+  FP64 in the mixed mode too;
 * hydrogen mass repartitioning (``hydrogen_mr = YES`` in [DYNAMICS], or a
   topology whose masses are already repartitioned);
 * positional restraints and [LOCAL_RESTRAINT] bonds and angles;
@@ -263,8 +268,8 @@ Supported simulations
 * any number of MPI processes, one GPU per process, on one or more nodes.
 
 Other settings (other force fields, LJ-PME and dispersion correction,
-FEP, GaMD, RPATH, other restraint types, targeted and steered MD, TIP4P
-virtual sites, the Langevin barostat, NPT in
+FEP, GaMD, RPATH, other restraint types, targeted and steered MD,
+the Langevin barostat, NPT in
 REMD, triclinic boxes) are not supported by the native core and run on the
 standard path.  The native core requires a double-precision build
 (``--enable-double``, the default).

@@ -1217,6 +1217,54 @@ __device__ __forceinline__ void rattle_water_solve(const double x[3][3],
     }
 }
 
+/* Four-site water (TIP4P): the massless site of a water held in registers,
+ * x[c][k] with k = O, H1, H2 (sp_constraints.fpp (decide_dummy)): at rOD from
+ * O along rOH1 + rH1H2/2. FP64 in both precisions: the site's position feeds
+ * pair forces at 0.15 A from O, and one square root per water is not the
+ * solve's cost. */
+__device__ __forceinline__ void msite_place(const double x[3][3], double rOD,
+                                            double xm[3])
+{
+    double rijk[3];
+    for (int c = 0; c < 3; ++c)
+        rijk[c] = (x[c][1] - x[c][0]) + 0.5 * (x[c][2] - x[c][1]);
+    const double dist = sqrt(rijk[0]*rijk[0] + rijk[1]*rijk[1] +
+                             rijk[2]*rijk[2]);
+    for (int c = 0; c < 3; ++c) xm[c] = x[c][0] + rOD * (rijk[c] / dist);
+}
+
+/* The massless site's force fd moved onto O, H1, H2
+ * (sp_constraints.fpp (water_force_redistribution)), in its operation order;
+ * xm is the site's stored coordinate, as stock reads it. With dv, the
+ * diagonal virial's change is added: stock's sum of f*r after minus before,
+ * formed from the differences (the total force is unchanged, so the origin
+ * drops out). */
+__device__ __forceinline__ void msite_spread(const double x[3][3],
+                                             const double xm[3], double rOD,
+                                             const double fd[3], double fo[3],
+                                             double f1[3], double f2[3],
+                                             double *dv)
+{
+    double rid[3], rijk[3];
+    for (int c = 0; c < 3; ++c) {
+        rid[c]  = xm[c] - x[c][0];
+        rijk[c] = (x[c][1] - x[c][0]) + 0.5 * (x[c][2] - x[c][1]);
+    }
+    const double dist_rijk = sqrt(rijk[0]*rijk[0] + rijk[1]*rijk[1] +
+                                  rijk[2]*rijk[2]);
+    const double dist_rid  = rid[0]*rid[0] + rid[1]*rid[1] + rid[2]*rid[2];
+    const double factor    = rOD / dist_rijk;
+    const double rid_fd    = rid[0]*fd[0] + rid[1]*fd[1] + rid[2]*fd[2];
+    const double q         = rid_fd / dist_rid;
+    for (int c = 0; c < 3; ++c) {
+        const double F1 = fd[c] - rid[c] * q;
+        fo[c] = fo[c] + fd[c] - factor * F1;
+        f1[c] = f1[c] + 0.5 * factor * F1;
+        f2[c] = f2[c] + 0.5 * factor * F1;
+        if (dv) dv[c] += factor * F1 * rijk[c] - fd[c] * rid[c];
+    }
+}
+
 template <int M>
 __device__ __forceinline__ bool hg_in(int ih, int J)
 {
@@ -1715,7 +1763,9 @@ __device__ __forceinline__ int hgroup_row(gc_i64 g, gc_i64 ngrp,
     return J;
 }
 
-template <class S>
+/* SITES 4 (TIP4P): wslot holds a fourth row, the massless site, placed from
+ * the solved water. */
+template <class S, int SITES = 3>
 __global__ void gcn_kern_settle_vv1(gc_i64 nwater,
                                     const gc_i32 *__restrict__ wslot,
                                     const gc_f64 *__restrict__ xref,
@@ -1726,7 +1776,8 @@ __global__ void gcn_kern_settle_vv1(gc_i64 nwater,
                                     double mass_H2O, double ra, double rb,
                                     double rc, double rHH, double inv_ra,
                                     double inv_dt,
-                                    gc_f64 *__restrict__ part, int nblk)
+                                    gc_f64 *__restrict__ part, int nblk,
+                                    double rOD = 0.0)
 {
     __shared__ double sh[GCN_RED_BLOCK];
     double acc[3] = { 0.0, 0.0, 0.0 };
@@ -1749,6 +1800,12 @@ __global__ void gcn_kern_settle_vv1(gc_i64 nwater,
                 x[(gc_i64)c * pitch + ia[k]] = xn[c][k];
                 if (vel_update) v[(gc_i64)c * pitch + ia[k]] = vw[c][k];
             }
+        if (SITES == 4) {
+            const int im = wslot[(gc_i64)3 * nwater + w];
+            double xm[3];
+            msite_place(xn, rOD, xm);
+            for (int c = 0; c < 3; ++c) x[(gc_i64)c * pitch + im] = xm[c];
+        }
     }
 
     block_reduce_sum(acc, 3, sh, part, nblk);
@@ -1777,6 +1834,86 @@ __global__ void gcn_kern_rattle_water(gc_i64 nwater,
             for (int c = 0; c < 3; ++c)
                 v[(gc_i64)c * pitch + ia[k]] = vw[c][k];
     }
+}
+
+/* TIP4P after an explicit force join: each water's massless-site force moved
+ * onto O, H1, H2 (msite_spread), and with part the diagonal virial's change.
+ *   MODE 0  the joined force f, in place;
+ *   MODE 1  an r-RESPA inner step, before the join: the short force is the
+ *           real-space lane plus the bonded lane, so the bonded lane takes
+ *           the change and the site's bonded entry cancels its real-space
+ *           one; the reciprocal lane keeps the last outer step's;
+ *   MODE 2  an r-RESPA outer step: MODE 1, and the reciprocal lane likewise,
+ *           on the same coordinates and geometry.
+ * The real-space lane is left as the pairs wrote it: the pair virial reads it.
+ * part takes six sums: the short force's change (MODE 0: the whole force's),
+ * then the reciprocal force's, which stock keeps apart (virial_long). */
+template <int MODE, class S>
+__global__ void __launch_bounds__(GCN_RED_BLOCK)
+gcn_kern_msite_force(gc_i64 nwater, const gc_i32 *__restrict__ wslot,
+                     const gc_f64 *__restrict__ x, S *__restrict__ f,
+                     const gc_f64 *__restrict__ fr, gc_f64 *__restrict__ fb,
+                     gc_f64 *__restrict__ fp, gc_i64 pitch, double rOD,
+                     gc_f64 *__restrict__ part, int nblk)
+{
+    __shared__ double sh[GCN_RED_BLOCK];
+    double dv[6] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+
+    for (gc_i64 w = (gc_i64)blockIdx.x * blockDim.x + threadIdx.x; w < nwater;
+         w += (gc_i64)gridDim.x * blockDim.x) {
+        int ia[4];
+        double xw[3][3], xm[3], fs[3][3], fd[3];
+        for (int k = 0; k < 4; ++k) ia[k] = wslot[(gc_i64)k * nwater + w];
+        for (int c = 0; c < 3; ++c) {
+            for (int k = 0; k < 3; ++k)
+                xw[c][k] = x[(gc_i64)c * pitch + ia[k]];
+            xm[c] = x[(gc_i64)c * pitch + ia[3]];
+        }
+        if (MODE == 0) {
+            for (int c = 0; c < 3; ++c) {
+                for (int k = 0; k < 3; ++k)
+                    fs[k][c] = f[(gc_i64)c * pitch + ia[k]];
+                fd[c] = f[(gc_i64)c * pitch + ia[3]];
+            }
+            msite_spread(xw, xm, rOD, fd, fs[0], fs[1], fs[2],
+                         part ? dv : 0);
+            for (int c = 0; c < 3; ++c) {
+                for (int k = 0; k < 3; ++k)
+                    f[(gc_i64)c * pitch + ia[k]] = (S)fs[k][c];
+                f[(gc_i64)c * pitch + ia[3]] = (S)0;
+            }
+        } else {
+            double frm[3];
+            for (int c = 0; c < 3; ++c) {
+                for (int k = 0; k < 3; ++k)
+                    fs[k][c] = fb[(gc_i64)c * pitch + ia[k]];
+                frm[c] = fr[(gc_i64)c * pitch + ia[3]];
+                fd[c]  = frm[c] + fb[(gc_i64)c * pitch + ia[3]];
+            }
+            msite_spread(xw, xm, rOD, fd, fs[0], fs[1], fs[2],
+                         part ? dv : 0);
+            for (int c = 0; c < 3; ++c) {
+                for (int k = 0; k < 3; ++k)
+                    fb[(gc_i64)c * pitch + ia[k]] = fs[k][c];
+                fb[(gc_i64)c * pitch + ia[3]] = -frm[c];
+            }
+            if (MODE == 2) {
+                for (int c = 0; c < 3; ++c) {
+                    for (int k = 0; k < 3; ++k)
+                        fs[k][c] = fp[(gc_i64)c * pitch + ia[k]];
+                    fd[c] = fp[(gc_i64)c * pitch + ia[3]];
+                }
+                msite_spread(xw, xm, rOD, fd, fs[0], fs[1], fs[2],
+                             part ? dv + 3 : 0);
+                for (int c = 0; c < 3; ++c) {
+                    for (int k = 0; k < 3; ++k)
+                        fp[(gc_i64)c * pitch + ia[k]] = fs[k][c];
+                    fp[(gc_i64)c * pitch + ia[3]] = 0.0;
+                }
+            }
+        }
+    }
+    if (part) block_reduce_sum(dv, 6, sh, part, nblk);
 }
 
 /* SHAKE over hydrogen groups. Arity is data (loop bounded by GC_MAX_HGROUP_H),
@@ -2084,7 +2221,10 @@ __global__ void gcn_kern_vv1_single(S *__restrict__ v,
 
 /* Waters: kick, drift and SETTLE (gcn_kern_settle_vv1's launch shape, so
  * its partials), the solve in R. */
-template <int VIEW, typename R, typename C = R>
+/* SITES 4 (TIP4P): the massless site takes neither kick nor drift; it is
+ * placed from the solved water, with its reference, force coordinate and list
+ * guard as the other members'. */
+template <int VIEW, typename R, typename C = R, int SITES = 3>
 __global__ void __launch_bounds__(GCN_RED_BLOCK)
 gcn_kern_vv1_water(gc_i64 nwater, const gc_i32 *__restrict__ wslot,
                    R *__restrict__ v, gc_f64 *__restrict__ x,
@@ -2096,7 +2236,8 @@ gcn_kern_vv1_water(gc_i64 nwater, const gc_i32 *__restrict__ wslot,
                    double rb, double rc, double rHH, double inv_ra,
                    double inv_dt, gc_f64 *__restrict__ part, int nblk,
                    const gc_i32 *__restrict__ wgrp,
-                   const struct gcn_view vwv, const struct gcn_rescale rs)
+                   const struct gcn_view vwv, const struct gcn_rescale rs,
+                   double rOD = 0.0)
 {
     __shared__ double sh[GCN_RED_BLOCK];
     double acc[3] = { 0.0, 0.0, 0.0 };
@@ -2149,6 +2290,21 @@ gcn_kern_vv1_water(gc_i64 nwater, const gc_i32 *__restrict__ wslot,
             for (int k = 0; k < 3; ++k)
                 view_guard_ref(vwv, lr[k], xn[0][k], xn[1][k], xn[2][k],
                                xr[0][k], xr[1][k], xr[2][k], m, ms);
+        if (SITES == 4) {
+            const int im = wslot[(gc_i64)3 * nwater + w];
+            double xm[3], xo[3];
+            msite_place(xn, rOD, xm);
+            for (int c = 0; c < 3; ++c) {
+                xo[c] = x[(gc_i64)c * pitch + im];
+                xref[(gc_i64)c * pitch + im] = xo[c];
+                x[(gc_i64)c * pitch + im]    = xm[c];
+            }
+            if (view_move_regs<VIEW>(vwv, mv))
+                view_atom(vwv, mv, xm[0], xm[1], xm[2], im, pitch);
+            if (VIEW)
+                view_guard(vwv, xm[0], xm[1], xm[2], xo[0], xo[1], xo[2], im,
+                           pitch, m, ms);
+        }
     }
     if (VIEW) guard_max_warp(m, ms, vwv.gmax);
     block_reduce_sum(acc, 3, sh, part, nblk);
@@ -2335,8 +2491,12 @@ __global__ void gcn_kern_vv2_single(S *__restrict__ v,
     }
 }
 
-/* Waters' VV2 half kick and water RATTLE, the solve in R */
-template <int JOIN, typename R, int TICK, typename C = R>
+/* Waters' VV2 half kick and water RATTLE, the solve in R. SITES 4 (TIP4P, with
+ * JOIN): the massless site's force is formed with the others' and moved onto
+ * them before the kick, and the four stored forces are the redistributed
+ * ones, as an explicit join leaves them (gcn_kern_msite_force). */
+template <int JOIN, typename R, int TICK, typename C = R,
+          int SITES = 3>
 __global__ void gcn_kern_vv2_water(gc_i64 nwater,
                                    const gc_i32 *__restrict__ wslot,
                                    R *__restrict__ v,
@@ -2348,7 +2508,8 @@ __global__ void gcn_kern_vv2_water(gc_i64 nwater,
                                    gc_i64 pitch, double half_dt, int full,
                                    double massO, double massH,
                                    const struct gcn_join j,
-                                   const struct gcn_tick_prep tp)
+                                   const struct gcn_tick_prep tp,
+                                   double rOD = 0.0)
 {
     __shared__ double sh[TICK ? GCN_RED_BLOCK : 1];
     double kin[6] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
@@ -2366,6 +2527,15 @@ __global__ void gcn_kern_vv2_water(gc_i64 nwater,
             fac[k] = half_dt * minv[ia[k]];
             force3_load<JOIN>(f, j, ovf, ia[k], pitch, fs[k]);
             if (TICK) mw[k] = __ldg(tp.mass + ia[k]);
+        }
+        if (SITES == 4 && JOIN) {
+            const int im = wslot[(gc_i64)3 * nwater + w];
+            double xm[3], fd[3];
+            const double zero[3] = { 0.0, 0.0, 0.0 };
+            for (int c = 0; c < 3; ++c) xm[c] = x[(gc_i64)c * pitch + im];
+            force3_load<JOIN>(f, j, ovf, im, pitch, fd);
+            msite_spread(xw, xm, rOD, fd, fs[0], fs[1], fs[2], 0);
+            force3_store<JOIN, R>(j, im, pitch, zero);
         }
         for (int k = 0; k < 3; ++k) {
             double va[3], pa[3];
@@ -2550,6 +2720,27 @@ __global__ void gcn_kern_rigid_flag(const gc_u8 *__restrict__ gkind,
          g += (gc_i64)gridDim.x * blockDim.x) {
         fw[g] = (gkind[g] == GC_GROUP_WATER)  ? 1 : 0;
         fh[g] = (gkind[g] == GC_GROUP_HGROUP) ? 1 : 0;
+    }
+}
+
+/* TIP4P: the water solvers' fourth row, each water's massless site (the
+ * fourth member in water_list order) */
+__global__ void gcn_kern_rigid_msite(const gc_i64 *__restrict__ goff,
+                                     const gc_i32 *__restrict__ gmem,
+                                     const gc_i32 *__restrict__ fw,
+                                     const gc_i64 *__restrict__ ow,
+                                     gc_i32 *__restrict__ wslot,
+                                     gc_i64 ngroup, gc_i64 nwater,
+                                     gc_i64 *__restrict__ bad)
+{
+    for (gc_i64 g = (gc_i64)blockIdx.x * blockDim.x + threadIdx.x; g < ngroup;
+         g += (gc_i64)gridDim.x * blockDim.x) {
+        if (!fw[g]) continue;
+        if (goff[g + 1] - goff[g] != 4) {
+            atomicAdd((unsigned long long *)bad, 1ull);
+            continue;
+        }
+        wslot[(gc_i64)3 * nwater + ow[g]] = gmem[goff[g] + 3];
     }
 }
 
@@ -3005,13 +3196,16 @@ gc_status native_build_rigid(gc_context *ctx, struct gcn_rigid_pending *pend)
         d->tick_part_cap = ntick + ntick / 4;
     }
 
-    if (nw > d->water_cap || d->water_slot == 0) {
+    const gc_i32 wrows = d->con.water_site == 4 ? 4 : 3;
+    if (nw > d->water_cap || d->water_slot == 0 || wrows != d->water_rows) {
         const gc_i64 m = nw + nw / 4 + 16;
         dev_release((void **)&d->water_slot);
         dev_release((void **)&d->water_group);
         d->water_cap = 0;
-        st = dev_calloc((void **)&d->water_slot, 3 * m * (gc_i64)sizeof(gc_i32));
+        st = dev_calloc((void **)&d->water_slot,
+                        wrows * m * (gc_i64)sizeof(gc_i32));
         if (st) return st;
+        d->water_rows = wrows;
         st = dev_calloc((void **)&d->water_group, m * (gc_i64)sizeof(gc_i32));
         if (st) return st;
         d->water_cap = m;
@@ -3061,6 +3255,11 @@ gc_status native_build_rigid(gc_context *ctx, struct gcn_rigid_pending *pend)
         d->hgr_group, d->hgr_h, d->hgr_arity,
         d->hgr_dist, d->hgr_inv_mass_h, d->hgr_inv_mass_c, ng, nw, nh,
         same ? d->verdict + 3 : tot + 1);
+    if (d->con.water_site == 4 && nw > 0)
+        gcn_kern_rigid_msite<<<(unsigned)grid_of(ng, GCN_BLOCK), GCN_BLOCK, 0,
+                               s>>>(
+            d->group_offset, d->group_member, fw, ow, d->water_slot, ng, nw,
+            same ? d->verdict + 3 : tot + 1);
     /* The arity check and the exclusion filter's count come back pinned with
      * the caller's next synchronisation (native_build_rigid_finish); the count
      * is published only after the check. */
@@ -3872,6 +4071,62 @@ static int join_in_solvers(const struct gcn_device *d)
                                   d->plan.ensemble == GC_ENSEMBLE_NVT);
 }
 
+/* TIP4P's force redistribution for an explicit join (gcn_kern_msite_force):
+ * 0 no four-site water; 1 the joined force; 2, 3 an r-RESPA inner and outer
+ * step's lanes. */
+int gcn::native_msite_mode(const struct gcn_device *d)
+{
+    if (d->con.water_site != 4 || d->num_water <= 0 || !d->con.fast_water)
+        return 0;
+    return 1 + d->msite_respa;
+}
+
+/* Queued on d->stream. With vir the six sums are finished into
+ * out_pin[3..8], which the caller reads after its own reduction's
+ * synchronisation (native_msite_virial). */
+gc_status gcn::native_msite_force(gc_context *ctx, int mode, int vir)
+{
+    struct gcn_device *d = ctx->native;
+    const gc_i64 nb = grid_of(d->num_water, GCN_RED_BLOCK);
+    gc_f64 *part = vir ? d->reduce_partial + 8 * (gc_i64)GCN_MAX_BLOCKS : 0;
+    const double rOD = d->con.water_r_od;
+    vf_each(d->vf32, [&](auto z) {
+        using S = decltype(z);
+#define GCN_MSITE(M)                                                        \
+        gcn_kern_msite_force<M, S><<<(unsigned)nb, GCN_RED_BLOCK, 0,        \
+                                     d->stream>>>(                          \
+            d->num_water, d->water_slot, d->coord, d->force.as<S>(),        \
+            d->force_real, d->force_bond, d->force_recip, d->pitch, rOD,    \
+            part, (int)nb)
+        if (mode == 1)      GCN_MSITE(0);
+        else if (mode == 2) GCN_MSITE(1);
+        else                GCN_MSITE(2);
+#undef GCN_MSITE
+    });
+    if (vir) finalize_launch(d, part, d->num_water, 6, d->out_pin + 3);
+    return dev_launched("msite_force");
+}
+
+void gcn::native_msite_virial(struct gcn_device *d, gc_f64 dv[3])
+{
+    for (int c = 0; c < 3; ++c) {
+        d->msite_virial_long[c] = d->out_pin[6 + c];
+        dv[c] = d->out_pin[3 + c] + d->msite_virial_long[c];
+    }
+}
+
+/* TIP4P under r-RESPA: the part of the last published virial that came from
+ * redistributing the reciprocal force. Stock holds it in virial_long, which
+ * mtk_barostat_vv1 adds on barostat steps only (sp_md_respa.fpp). */
+extern "C" gc_status gpu_core_msite_virial_long(const gc_context *ctx,
+                                                gc_f64 *viri3)
+{
+    if (ctx == 0 || ctx->native == 0 || viri3 == 0) return GC_E_ARG;
+    for (int c = 0; c < 3; ++c)
+        viri3[c] = ctx->native->msite_virial_long[c];
+    return GC_OK;
+}
+
 static gc_status join_flush(gc_context *ctx)
 {
     if (!ctx->native->join_pending) return GC_OK;
@@ -4028,6 +4283,7 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
      * the singles' kick on a second lane. Convergence counters stay on the
      * device until read (verdict_read). */
     const int water = d->num_water > 0 && d->con.fast_water;
+    const int msite = water && d->con.water_site == 4;   /* TIP4P */
     const int hgrp = d->num_hgroup > 0;
     const int kick = mode == GC_CONSTRAIN_VV1 ? d->vv1_pending
                                               : d->vv2_pending;
@@ -4123,7 +4379,16 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
             const double ra = h * (2.0 * mH) / mtot;
             const double rb = h - ra;
             if (kick)
-                (d->vf32 && (mixed_con64() & 32)
+                (msite
+                 ? (d->vf32 && (mixed_con64() & 32)
+                    ? (view ? gcn_kern_vv1_water<1, S, gcn_mp, 4>
+                            : gcn_kern_vv1_water<0, S, gcn_mp, 4>)
+                    : mixed_con64() & 4
+                    ? (view ? gcn_kern_vv1_water<1, S, double, 4>
+                            : gcn_kern_vv1_water<0, S, double, 4>)
+                    : (view ? gcn_kern_vv1_water<1, S, S, 4>
+                            : gcn_kern_vv1_water<0, S, S, 4>))
+                 : d->vf32 && (mixed_con64() & 32)
                  ? (view ? gcn_kern_vv1_water<1, S, gcn_mp>
                          : gcn_kern_vv1_water<0, S, gcn_mp>)
                  : mixed_con64() & 4
@@ -4135,7 +4400,15 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
                     d->coord_ref, d->force.as<S>(), d->inv_mass, d->pitch,
                     d->plan.dt, d->plan.half_dt, mO, mH, mtot, ra, rb, rc, rHH,
                     1.0 / ra, 1.0 / dt, d->reduce_partial, (int)nbw,
-                    d->water_group, vw, rs);
+                    d->water_group, vw, rs,
+                    msite ? d->con.water_r_od : 0.0);
+            else if (msite)
+                gcn_kern_settle_vv1<S, 4><<<(unsigned)nbw, GCN_RED_BLOCK, 0,
+                                            s>>>(
+                    d->num_water, d->water_slot, d->coord_ref, d->coord,
+                    d->vel.as<S>(), d->pitch, 1, mO, mH, mtot, ra, rb, rc,
+                    rHH, 1.0 / ra, 1.0 / dt, d->reduce_partial, (int)nbw,
+                    d->con.water_r_od);
             else
                 gcn_kern_settle_vv1<<<(unsigned)nbw, GCN_RED_BLOCK, 0, s>>>(
                     d->num_water, d->water_slot, d->coord_ref, d->coord,
@@ -4229,7 +4502,13 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
                 d->con.shake_tolerance, d->gid, d->con_fail);
         tp.off = off_w;
         if (water && kick)
-            (mixed_con64() & 8
+            (msite && join
+             ? (mixed_con64() & 8
+                ? (prep ? gcn_kern_vv2_water<1, S, 1, double, 4>
+                        : gcn_kern_vv2_water<1, S, 0, double, 4>)
+                : (prep ? gcn_kern_vv2_water<1, S, 1, S, 4>
+                        : gcn_kern_vv2_water<1, S, 0, S, 4>))
+             : mixed_con64() & 8
              ? (prep ? (join ? gcn_kern_vv2_water<1, S, 1, double>
                              : gcn_kern_vv2_water<0, S, 1, double>)
                      : (join ? gcn_kern_vv2_water<1, S, 0, double>
@@ -4242,7 +4521,8 @@ extern "C" gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode,
                 d->num_water, d->water_slot, d->vel.as<S>(), d->vel_half,
                 d->vel_full, d->coord, d->force.as<S>(), d->inv_mass,
                 d->pitch, d->plan.half_dt, full, d->con.water_mass_o,
-                d->con.water_mass_h, jv, tp);
+                d->con.water_mass_h, jv, tp,
+                msite ? d->con.water_r_od : 0.0);
         else if (water)
             gcn_kern_rattle_water<<<gw, GCN_BLOCK, 0, sv>>>(
                 d->num_water, d->water_slot, d->coord, d->vel.as<S>(),
@@ -4436,6 +4716,9 @@ static gc_status force_eval(gc_context *ctx, gc_i32 want_energy,
     if (ctx == 0 || ctx->native == 0 || out == 0) return GC_E_ARG;
     struct gcn_device *d = ctx->native;
     if (!d->list_valid) return GC_E_STATE;
+    d->msite_respa = respa;
+    d->msite_virial_long[0] = d->msite_virial_long[1] =
+        d->msite_virial_long[2] = 0.0;
 
     gc_status st;
     if (d->graph_mode == GCN_GRAPH_REPLAY) {

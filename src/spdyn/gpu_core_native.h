@@ -352,7 +352,13 @@ struct gcn_device {
     gc_i32 excl_keep_valid;     /* derived from this build's records     */
 
     gc_i64 num_water;
-    gc_i32 *water_slot;         /* [3*num_water], component major        */
+    gc_i32 *water_slot;         /* [3*num_water], component major; TIP4P
+                                 * a fourth row, the massless site        */
+    gc_i32 water_rows;          /* rows water_slot was allocated with     */
+    gc_f64 msite_virial_long[3]; /* TIP4P: the last published virial's
+                                 * reciprocal-force redistribution part   */
+    gc_i32 msite_respa;         /* the last force's integrator lanes: 0
+                                 * one step, 1 r-RESPA inner, 2 outer     */
     gc_i32 *water_group;        /* [num_water], each water's group       */
     gc_i64 num_hgroup;
     gc_i32 *hgr_heavy;          /* [num_hgroup]                          */
@@ -841,6 +847,10 @@ gc_status native_force_join(gc_context *ctx, gc_i32 want_virial,
                             gc_i32 publish, gc_i32 keep,
                             gc_step_result *out);
 gc_status native_force_join_view(gc_context *ctx, struct gcn_join *j);
+/* gpu_step.cu: TIP4P's force redistribution for the explicit join */
+int       native_msite_mode(const struct gcn_device *d);
+gc_status native_msite_force(gc_context *ctx, int mode, int vir);
+void      native_msite_virial(struct gcn_device *d, gc_f64 dv[3]);
 
 /* gpu_pme.cu */
 gc_status native_pme_plan(gc_context *ctx, const gc_pme_desc *d);

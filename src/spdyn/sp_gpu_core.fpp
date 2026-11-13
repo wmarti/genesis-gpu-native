@@ -1032,6 +1032,13 @@ contains
     core%cons%water_mass_h    = real(constraints%water_massH, c_double)
     core%cons%water_r_oh      = real(constraints%water_rOH, c_double)
     core%cons%water_r_hh      = real(constraints%water_rHH, c_double)
+    ! TIP4P: the massless site is placed and its force redistributed on the
+    ! device (sp_constraints.fpp (decide_dummy, water_force_redistribution))
+    core%cons%water_site      = 3_c_int32_t
+    if (constraints%water_type == TIP4) then
+      core%cons%water_site    = 4_c_int32_t
+      core%cons%water_r_od    = real(constraints%water_rOD, c_double)
+    end if
 
     call gpu_core_build_rigid(core, domain, constraints)
     nrigid = 0_c_int64_t

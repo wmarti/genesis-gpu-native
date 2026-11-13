@@ -462,6 +462,8 @@ typedef struct gc_constraint_desc {
     gc_f64        water_mass_h;
     gc_f64        water_r_oh;
     gc_f64        water_r_hh;
+    gc_f64        water_r_od;          /* TIP4P: O to the massless site   */
+    gc_i32        water_site;          /* 3, or 4 (TIP4P)                 */
 } gc_constraint_desc;
 
 /* 2.9  The reciprocal sum: mesh, alpha and B-spline order are GENESIS's and
@@ -671,6 +673,7 @@ gc_status gpu_core_constrain(gc_context *ctx, gc_i32 mode, gc_f64 dt,
 /* compute_virial_group: rigid-group virial from the reference coordinates and
  * the current force, over water and hydrogen groups only. */
 gc_status gpu_core_group_virial(const gc_context *ctx, gc_f64 *viri3);
+gc_status gpu_core_msite_virial_long(const gc_context *ctx, gc_f64 *viri3);
 
 /* List-validity guard (doc/21_GPU_Native.rst). defer queues this step's d_max
  * (and largest one-step move) on the device; armed = 1 on a step that keeps its

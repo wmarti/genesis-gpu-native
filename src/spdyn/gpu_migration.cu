@@ -1774,7 +1774,8 @@ recv_check_group(const gcn_group_migration_wire &gr, gc_i64 na,
     if (gr.atom_offset > na) return GC_E_MISMATCH;
     if (gr.atom_count > na - gr.atom_offset) return GC_E_MISMATCH;
     if ((gr.kind == (gc_i32)GC_GROUP_SINGLE && gr.atom_count != 1) ||
-        (gr.kind == (gc_i32)GC_GROUP_WATER && gr.atom_count != 3) ||
+        (gr.kind == (gc_i32)GC_GROUP_WATER && gr.atom_count != 3 &&
+         gr.atom_count != 4) ||
         (gr.kind == (gc_i32)GC_GROUP_HGROUP &&
          (gr.atom_count < 2 || gr.atom_count > (gc_i64)GC_MAX_HGROUP_H + 1)))
         return GC_E_MISMATCH;
@@ -1817,7 +1818,9 @@ recv_check_atom(const gcn_atom_migration_wire &a, const RecvParams &dp)
     if (!recv_finite(a.charge) || !recv_finite(a.mass) ||
         !recv_finite(a.inv_mass))
         return GC_E_MISMATCH;
-    if (!(a.mass > 0.0) || !(a.inv_mass >= 0.0) || a.cls < 1)
+    /* a massless atom is a 4-site water's virtual site, inverse mass 0 */
+    if (!(a.mass > 0.0 || (a.mass == 0.0 && a.inv_mass == 0.0)) ||
+        !(a.inv_mass >= 0.0) || a.cls < 1)
         return GC_E_MISMATCH;
     if (a.epoch != dp.expect_epoch) return GC_E_EPOCH;
     if (a.source_rank != dp.peer_rank || a.destination_rank != dp.self_rank)

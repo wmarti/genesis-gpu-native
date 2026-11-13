@@ -277,6 +277,8 @@ module sp_gpu_core_abi_mod
     real(c_double)     :: water_mass_h = 0.0_c_double
     real(c_double)     :: water_r_oh = 0.0_c_double
     real(c_double)     :: water_r_hh = 0.0_c_double
+    real(c_double)     :: water_r_od = 0.0_c_double
+    integer(c_int32_t) :: water_site = 0
   end type s_gc_constraint
 
   type, bind(c) :: s_gc_pme
@@ -572,6 +574,13 @@ module sp_gpu_core_abi_mod
     end function
 
     integer(c_int32_t) function gpu_core_group_virial(ctx, viri3) bind(c)
+      import
+      type(c_ptr), value :: ctx
+      real(c_double)     :: viri3(*)
+    end function
+
+    integer(c_int32_t) function gpu_core_msite_virial_long(ctx, viri3)    &
+                         bind(c)
       import
       type(c_ptr), value :: ctx
       real(c_double)     :: viri3(*)

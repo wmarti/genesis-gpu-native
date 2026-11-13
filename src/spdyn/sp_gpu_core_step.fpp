@@ -152,10 +152,11 @@ contains
                'and nsteps are multiples of elec_long_period'
     else if (.not. respa .and. dynamics%integrator /= IntegratorVVER) then
       reason = 'only integrators VVER and VRES are native'
-    else if (constraints%water_type == TIP4) then
-      ! the massless site's force goes back through stock's
-      ! water_force_redistribution, which the native step does not have
-      reason = 'TIP4P water is not qualified for the native core'
+    else if (constraints%water_type == TIP4 .and. .not. &
+             (constraints%rigid_bond .and. constraints%fast_water)) then
+      ! the massless site is placed by the device's water solve
+      reason = 'TIP4P water is native only with rigid_bond = YES '// &
+               'and fast_water = YES'
     else if (dynamics%target_md .or. dynamics%steered_md) then
       reason = 'targeted and steered dynamics are not qualified'
     else if (enefunc%forcefield /= ForcefieldCHARMM .and. &
@@ -906,7 +907,7 @@ contains
     integer(c_int32_t)       :: guard_n, defer_vv2, want_virial, tick_next
     integer(c_int32_t)       :: routes(3)
     integer(c_int64_t)       :: guard_kept_over
-    real(c_double)           :: kin_half3(3), kin_full3(3), viri3(3)
+    real(c_double)           :: kin_half3(3), kin_full3(3), viri3(3), viri_msite(3)
     real(c_double), target   :: rmsg_local, ekin_sum_local
     real(dp)                 :: ekin_half, ekin_full
     real(wip)                :: scale_vel, scale_vel2, rr
@@ -1400,6 +1401,18 @@ contains
         call gpu_core_abort('Gpu_Core_Vverlet> force: ' // &
                        trim(gc_status_text(status)))
       call gpu_core_collect(result, dynvars, enefunc, boundary)
+      ! TIP4P: stock r-RESPA keeps the reciprocal force's redistribution
+      ! virial in virial_long, which mtk_barostat_vv1 adds on barostat
+      ! steps only; an output step between them prints the virial without it
+      if (respa .and. npt .and. want_virial /= 0 .and.                    &
+          constraints%water_type == TIP4 .and.                            &
+          mod(i, dynamics%baro_period) /= 0) then
+        call gc_check(gpu_core_msite_virial_long(core%ctx, viri_msite),   &
+                      'Gpu_Core_Vverlet> TIP4P long virial')
+        do k = 1, 3
+          dynvars%virial(k,k) = dynvars%virial(k,k) - viri_msite(k)
+        end do
+      end if
       call timer(TimerEnergy, TimerOff)
 
       ! The restart writer serializes the stocked RNG, not the live state.

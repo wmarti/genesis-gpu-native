@@ -1500,7 +1500,7 @@ gc_status native_dist_prepare_outer(gc_context *ctx)
     }
     if (st != GC_OK) {
         std::fprintf(stderr, "GPU_Core_Decline> phase=dist_outer_count_admit "
-                     "rank=%d status=%d\n", (int)ctx->rank, (int)st);
+                     "rank=%d status=%d: %s\n", (int)ctx->rank, (int)st, why);
     }
     st = native_dist_vote(ctx, st, "dist_outer_count_admit");
     if (st != GC_OK) return st;
